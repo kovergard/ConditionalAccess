@@ -53,25 +53,25 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 
 # Define variables
-$NeededScopes = "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "Application.Read.All", "Group.ReadWrite.All"
-$CaPolicyChildPath = "Identity\Conditional\AccessPolicies"
-$CaLocationChildPath = "Identity\Conditional\NamedLocations"
-$GroupChildPath = "Groups"
-$BuiltinLocations = @('All','AllTrusted')
+$NeededScopes = 'Policy.Read.All', 'Policy.ReadWrite.ConditionalAccess', 'Application.Read.All', 'Group.ReadWrite.All'
+$CaPolicyChildPath = 'Identity\Conditional\AccessPolicies'
+$CaLocationChildPath = 'Identity\Conditional\NamedLocations'
+$GroupChildPath = 'Groups'
+$BuiltinLocations = @('All', 'AllTrusted')
 
 # Ensure that Microsoft.Graph is available
 if (-not (Get-InstalledModule -Name Microsoft.Graph -ErrorAction SilentlyContinue)) {
-    Write-Warning "This script uses the Microsoft.Graph module. Please make sure it is installed."
+    Write-Warning 'This script uses the Microsoft.Graph module. Please make sure it is installed.'
     return
 }
 
 # Ensure a Graph connection exists with the right permissions
 $MgContext = Get-MgContext -ErrorAction SilentlyContinue
 if ($null -eq $MgContext) {
-    Write-Warning "Please run Connect-MgGraph before running this script."
+    Write-Warning 'Please run Connect-MgGraph before running this script.'
     return
 }
-$MissingScopes = Compare-Object -ReferenceObject $MgContext.Scopes -DifferenceObject $NeededScopes | Where-Object {$_.SideIndicator -eq '=>'} | Select-Object -ExpandProperty InputObject
+$MissingScopes = Compare-Object -ReferenceObject $MgContext.Scopes -DifferenceObject $NeededScopes | Where-Object { $_.SideIndicator -eq '=>' } | Select-Object -ExpandProperty InputObject
 if ($MissingScopes) {
     Write-Warning "Missing the following scopes in Graph: $($MissingScopes -join ', ')"
     return
@@ -88,8 +88,7 @@ $CaPolicies = $CaJsonFiles | ForEach-Object {
         Write-Warning "Could not import JSON from file $_.FullName. "
     }
 }
-if ($null -eq $CaPolicies)
-{
+if ($null -eq $CaPolicies) {
     Write-Warning "No policies could be imported from $CaJsonPath"
     return
 }
@@ -98,24 +97,23 @@ Write-Host "Found $($CaPolicies.Count) Conditional Access policies in $CaJsonPat
 
 # Get names of existing Conditional Access policies
 $ExistingCaPolicyNames = @(Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/beta/identity/conditionalAccess/policies' | Select-Object -ExpandProperty value | Select-Object -ExpandProperty displayName)
-$ExistingCaPolicies = Compare-Object -ReferenceObject $ExistingCaPolicyNames -DifferenceObject $CaPolicies.displayName -IncludeEqual | Where-Object {$_.SideIndicator -eq '=='} | Select-Object -ExpandProperty InputObject
+$ExistingCaPolicies = Compare-Object -ReferenceObject $ExistingCaPolicyNames -DifferenceObject $CaPolicies.displayName -IncludeEqual | Where-Object { $_.SideIndicator -eq '==' } | Select-Object -ExpandProperty InputObject
 if ($ExistingCaPolicies) {
-    Write-Host "The following Conditional Access policies already exists, and will be skipped during import:" -ForegroundColor Green
+    Write-Host 'The following Conditional Access policies already exists, and will be skipped during import:' -ForegroundColor Green
     $ExistingCaPolicies | Sort-Object | ForEach-Object {
         Write-Host " - $_"
     }
-    $CaPolicies = $CaPolicies | Where-Object {$_.displayName -notin $ExistingCaPolicyNames}
+    $CaPolicies = $CaPolicies | Where-Object { $_.displayName -notin $ExistingCaPolicyNames }
 }
 
 # Ensure that all group names used in policies exists in Entra ID
-Write-Host "Creating Entra ID groups used in policies." -ForegroundColor Green
+Write-Host 'Creating Entra ID groups used in policies.' -ForegroundColor Green
 $CaPolicyGroupIds = $CaPolicies | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty users | Select-Object -ExpandProperty excludeGroups
 $CaPolicyGroupIds += $CaPolicies | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty users | Select-Object -ExpandProperty includeGroups
 $CaPolicyGroupIds = $CaPolicyGroupIds | Select-Object -Unique
 $GroupJsonPath = Join-Path -Path $Path -ChildPath $GroupChildPath -ErrorAction SilentlyContinue
 $GroupIdMapping = @()
-foreach ($GroupId in $CaPolicyGroupIds)
-{
+foreach ($GroupId in $CaPolicyGroupIds) {
     try {
         $GroupExportPath = Join-Path -Path $GroupJsonPath -ChildPath $GroupId -AdditionalChildPath "$GroupId.json"
         $GroupExport = Get-Content $GroupExportPath | ConvertFrom-Json
@@ -124,10 +122,10 @@ foreach ($GroupId in $CaPolicyGroupIds)
     catch {
         $GroupDisplayName = $null
         Write-Warning "Group with ID $GroupId not found in $GroupExportPath. Skipping group creation."
-        Continue
+        continue
     }
 
-    $FilterName = $GroupDisplayName.replace('&','%26')
+    $FilterName = $GroupDisplayName.replace('&', '%26')
     $ImportId = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups?`$filter=displayName eq '$FilterName'" | Select-Object -ExpandProperty value | Select-Object -ExpandProperty id
     if ($null -eq $ImportId) {
         $NewGroupJson = [PSCustomObject]@{
@@ -138,7 +136,7 @@ foreach ($GroupId in $CaPolicyGroupIds)
         } | ConvertTo-Json
 
         try {
-            $CreateGroupRequest = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/groups" -Body $NewGroupJson
+            $CreateGroupRequest = Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/groups' -Body $NewGroupJson
             $ImportId = $CreateGroupRequest.id
             Write-Host " - $GroupDisplayName"
         }
@@ -156,14 +154,13 @@ foreach ($GroupId in $CaPolicyGroupIds)
 }
 
 # Ensure that all named locations used in policies exists in Entra ID
-Write-Host "Creating named locations used in policies." -ForegroundColor Green
+Write-Host 'Creating named locations used in policies.' -ForegroundColor Green
 $CaPolicyLocationIds = $CaPolicies | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty locations | Select-Object -ExpandProperty includeLocations
 $CaPolicyLocationIds += $CaPolicies | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty locations | Select-Object -ExpandProperty excludeLocations
 $CaPolicyLocationIds = $CaPolicyLocationIds | Select-Object -Unique
 $LocationJsonPath = Join-Path -Path $Path -ChildPath $CaLocationChildPath -ErrorAction SilentlyContinue
 $LocationIdMapping = @()
-foreach ($LocationId in $CaPolicyLocationIds)
-{
+foreach ($LocationId in $CaPolicyLocationIds) {
     if ($LocationId -in $BuiltinLocations) {
         $ExportId = $LocationId
         $ImportId = $LocationId
@@ -178,10 +175,10 @@ foreach ($LocationId in $CaPolicyLocationIds)
         catch {
             $LocationExport = $null
             Write-Warning "Location with ID $LocationId not found in $LocationExportPath. Skipping location creation."
-            Continue
+            continue
         }
 
-        $FilterName = $LocationDisplayName.replace('&','%26')
+        $FilterName = $LocationDisplayName.replace('&', '%26')
         $ImportId = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations?`$filter=displayName eq '$FilterName'" | Select-Object -ExpandProperty value | Select-Object -ExpandProperty id
         if ($null -eq $ImportId) {
             $NewLocationJson = [PSCustomObject]@{
@@ -193,7 +190,7 @@ foreach ($LocationId in $CaPolicyLocationIds)
             } | ConvertTo-Json
 
             try {
-                $CreateLocationRequest = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations" -Body $NewLocationJson
+                $CreateLocationRequest = Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations' -Body $NewLocationJson
                 $ImportId = $CreateLocationRequest.id
                 Write-Host " - $LocationDisplayName"
             }
@@ -212,43 +209,42 @@ foreach ($LocationId in $CaPolicyLocationIds)
 }
 
 # Create Conditional Access policies
-Write-Host "Creating Conditional Access policies in Entra ID." -ForegroundColor Green
+Write-Host 'Creating Conditional Access policies in Entra ID.' -ForegroundColor Green
 foreach ($CaPolicy in $CaPolicies) {
     $Conditions = $CaPolicy.conditions
 
     # Map group IDs
     $IncludeGroups = @($Conditions.users.includeGroups | ForEach-Object {
-        $ExportId = $_
-        $GroupIdMapping | Where-Object {$_.ExportId -eq $ExportId} | Select-Object -ExpandProperty ImportId
-    })
+            $ExportId = $_
+            $GroupIdMapping | Where-Object { $_.ExportId -eq $ExportId } | Select-Object -ExpandProperty ImportId
+        })
     $Conditions.users.includeGroups = $IncludeGroups
 
     $ExcludeGroups = @($Conditions.users.excludeGroups | ForEach-Object {
-        $ExportId = $_
-        $GroupIdMapping | Where-Object {$_.ExportId -eq $ExportId} | Select-Object -ExpandProperty ImportId
-    })
+            $ExportId = $_
+            $GroupIdMapping | Where-Object { $_.ExportId -eq $ExportId } | Select-Object -ExpandProperty ImportId
+        })
     $Conditions.users.excludeGroups = $ExcludeGroups
 
     # Map location IDs
     if ($Conditions.locations) {
         $IncludeLocations = @($Conditions.locations.includeLocations | ForEach-Object {
-            $ExportId = $_
-            $LocationIdMapping | Where-Object {$_.ExportId -eq $ExportId} | Select-Object -ExpandProperty ImportId
-        })
+                $ExportId = $_
+                $LocationIdMapping | Where-Object { $_.ExportId -eq $ExportId } | Select-Object -ExpandProperty ImportId
+            })
         $Conditions.locations.includeLocations = $IncludeLocations
 
         $ExcludeLocations = @($Conditions.locations.excludeLocations | ForEach-Object {
-            $ExportId = $_
-            $LocationIdMapping | Where-Object {$_.ExportId -eq $ExportId} | Select-Object -ExpandProperty ImportId
-        })
+                $ExportId = $_
+                $LocationIdMapping | Where-Object { $_.ExportId -eq $ExportId } | Select-Object -ExpandProperty ImportId
+            })
         $Conditions.locations.excludeLocations = $ExcludeLocations
     }
 
     # Fix authentication strength
     $GrantControls = $CaPolicy.grantControls
     $AuthStrength = $GrantControls | Select-Object -ExpandProperty authenticationStrength
-    if ($null -ne $AuthStrength)
-    {
+    if ($null -ne $AuthStrength) {
         $AuthStrength = [PSCustomObject]@{
             id = $GrantControls.authenticationStrength.id
         }
@@ -257,8 +253,7 @@ foreach ($CaPolicy in $CaPolicies) {
     # If CAE is in policy, it cannot be in Report-only, set to off.
     $State = 'EnabledForReportingButNotEnforced'
     $CaeMode = $CaPolicy | Select-Object -ExpandProperty sessionControls | Select-Object -ExpandProperty continuousAccessEvaluation
-    if ($null -ne $CaeMode)
-    {
+    if ($null -ne $CaeMode) {
         $State = 'disabled'
     }
 
@@ -271,24 +266,26 @@ foreach ($CaPolicy in $CaPolicies) {
         state           = $State
     } | ConvertTo-Json -Depth 10
     try {
-        $null = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/identity/conditionalAccess/policies" -Body $NewPolicyJson
+        $null = Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/beta/identity/conditionalAccess/policies' -Body $NewPolicyJson
         Write-Host " - $($CaPolicy.displayName)"
     }
     catch {
         $Exception = $_
-        $Message =  $Exception | Select-Object -ExpandProperty ErrorDetails |  Select-Object -ExpandProperty Message
-        if ($null -ne $Message) {
-            if ($Message.Contains('1038: The policy you are trying to create or update contains preview features')) {
-                Write-Warning "Could not create Conditional Access policy '$($CaPolicy.displayName)', as it uses preview features." #TODO: Make retry with the beta endpoint
-                Continue
+        $Message = $Exception | Select-Object -ExpandProperty ErrorDetails | Select-Object -ExpandProperty Message
+        try {
+            $InnerErrorMessage = $Message.Substring($Message.IndexOf('{"error":')) | ConvertFrom-Json | Select-Object -ExpandProperty error | Select-Object -ExpandProperty innerError | Select-Object -ExpandProperty message
+            if ($InnerErrorMessage -like '1034*d4ebce55-015a-49b5-a083-c84d1797ae8c*') {
+                $CreationError = 'Microsoft Intune Enrollment application is missing'
             }
-            if ($Message.Contains('1039: Cannot create or update policies with premium P2 features')) {
-                Write-Warning "Could not create Conditional Access policy '$($CaPolicy.displayName)', as it requires a premium P2 license."
-                Continue
+            else {
+                $CreationError = "Error $InnerErrorMessage"
             }
         }
-        Write-Warning "Could not create Conditional Access policy '$($CaPolicy.displayName)'. $Exception"
+        catch {
+            $CreationError = $Exception
+        }
+        Write-Warning "Could not create Conditional Access policy '$($CaPolicy.displayName)'. $CreationError"
     }
 }
 
-Write-Host "DONE." -ForegroundColor Green
+Write-Host 'DONE.' -ForegroundColor Green
