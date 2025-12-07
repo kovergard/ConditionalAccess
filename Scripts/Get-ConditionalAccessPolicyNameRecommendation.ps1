@@ -48,33 +48,49 @@ function Resolve-CaApplication {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [string[]]
-        $Id
+        [hashtable]
+        $Policy
     )
 
+    $Applications = $Policy.conditions.applications
+
     # Determine cloud app
-    if ($Id -contains 'All') {
-        return 'All cloud apps'
-    }
-    elseif ($Id.count -gt 1) {
-        return 'Multiple apps'
-    }
-    else {
-        try {
-            $SpLookup = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '$Id'"
-            return $SpLookup.value.displayName
+    if ($Applications.includeApplications) {
+        $AppId = $Applications.includeApplications
+        if ($AppId -contains 'All') {
+            return 'All cloud apps'
         }
-        catch {
-            return 'Unknown app'
-        }        
+        elseif ($AppId.count -gt 1) {
+            return 'Multiple apps'
+        }
+        else {
+            try {
+                $SpLookup = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '$AppId'"
+                return $SpLookup.value.displayName
+            }
+            catch {
+                return 'Unknown app'
+            }        
+        }
     }
+
+    # Determine user action
+    if ($Applications.includeUserActions) {
+        if ($Applications.includeUserActions -contains 'urn:user:registerdevice' ) {
+            return 'Register or join device'
+        }
+        return 'Unknown action'
+    }
+
+    Write-Warning "Could not resolve application or action from $($Applications | ConvertTo-Json -Compress)"
+    return 'Unresolved app or action'
 }
 
 function Resolve-CaResponse {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [Hashtable]
+        [hashtable]
         $Policy
     )
 
@@ -94,7 +110,7 @@ function Resolve-CaPrincipal {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [Hashtable]
+        [hashtable]
         $Policy
     )
 
@@ -122,29 +138,37 @@ $MaxPoliciesToProcess = 100
 
 Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' | Select-Object -ExpandProperty value | ForEach-Object {
     if ($MaxPoliciesToProcess -gt 0) {
-        
-        $Policy = $_
-        # $Policy | ConvertTo-Json -Depth 4
+        try {
+            $Policy = $_
+            # $Policy | ConvertTo-Json -Depth 4
 
-        $CloudApp = Resolve-CaApplication -Id $Policy.conditions.applications.includeApplications
-        $Response = Resolve-CaResponse -Policy $Policy
-        $Principal = Resolve-CaPrincipal -Policy $Policy
-        $Conditions = 'Some Conditions'
+            $CloudApp = Resolve-CaApplication -Policy $Policy
+            $Response = Resolve-CaResponse -Policy $Policy
+            $Principal = Resolve-CaPrincipal -Policy $Policy
+            $Conditions = 'SOME CONDITIONS'
 
-        $RecommendedPolicyName = $PolicyNameTemplate -replace '<SN>', 'CAxx' -replace '<CloudApp>', $CloudApp -replace '<Response>', $Response -replace '<Principal>', $Principal -replace '<Conditions>', $Conditions
+            $RecommendedPolicyName = $PolicyNameTemplate -replace '<SN>', 'CAxx' -replace '<CloudApp>', $CloudApp -replace '<Response>', $Response -replace '<Principal>', $Principal -replace '<Conditions>', $Conditions
 
-        <#
+            <#
         `
             -replace '<SN>', ($Policy.displayName -split ' - ')[0] `
             -replace '<MFA' } else { 'Other Control' }) `
             -replace '<Pricipal>', (if ($Policy.conditions.users.includeRoles) { 'Admins' } else { 'Users' }) `
             -replace '<Conditions>', (if ($Policy.conditions.clientAppTypes -contains 'all') { 'All client apps' } else { ($Policy.conditions.clientAppTypes -join ', ') })
 #>
-        [PSCustomObject]@{
-            CurrentPolicyName     = $Policy.displayName
-            RecommendedPolicyName = $RecommendedPolicyName
-            ComplianceStatus      = 'TODO'
+            [PSCustomObject]@{
+                CurrentPolicyName     = $Policy.displayName
+                RecommendedPolicyName = $RecommendedPolicyName
+                ComplianceStatus      = 'TODO'
+            }
+            
         }
+        catch {
+            $_
+            $Policy | ConvertTo-Json -Depth 4
+            throw 'STOP'
+            
+        }        
     
         $MaxPoliciesToProcess--
     }
