@@ -2,16 +2,32 @@
     WIP
 #>
 [CmdletBinding()]
-param()
+param(
+    # Templates string for the suggested policy names
+    [Parameter()]
+    [string]
+    $PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
+)
 #requires -version 7.5.0
+
+# Tempoary
+
+#region Internal variables
+
+# At time of script authoring, the beta endpoint had be used to read newer features, like Continuous Access Evaluation
+$GraphVersion = 'beta'
+
+#endregion
+
+#region Initialize
 
 # Always stop on errors
 $ErrorActionPreference = 'Stop'
+
+# Enforce strict mode
 Set-StrictMode -Version Latest
 
-# Define variables
-$GraphVersion = 'beta'
-$PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
+#endregion
 
 #region Internal functions
 
@@ -321,8 +337,10 @@ foreach ($MgPolicy in $MgPolicies) {
             $SnIndex++
         }
 
+        # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
+
         # Resolve policy components
-        #TODO: Some policies might have multiple responses, applications, principals, conditions - need to handle those better
+        # TODO: Some policies might have multiple responses, applications, principals, conditions - need to handle those better
         $CloudApp = Resolve-CaApplication -Policy $MgPolicy
         $Response = Resolve-CaResponse -Policy $MgPolicy
         $Principal = Resolve-CaPrincipal -Policy $MgPolicy
