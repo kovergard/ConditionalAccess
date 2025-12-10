@@ -6,7 +6,8 @@ param(
     # Templates string for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
+    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Grant>-<Optional>'
+    #$PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
 )
 #requires -version 7.5.0
 
@@ -60,7 +61,7 @@ function Confirm-GraphConnection {
     return $MgContext
 }
 
-function Resolve-CaApplication {
+function Resolve-CaTargetResource {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -68,50 +69,101 @@ function Resolve-CaApplication {
         $Policy
     )
 
-    $Applications = $Policy.conditions.applications
-
     # Resolve cloud app
-    if ($Applications.includeApplications) {
-        $AppId = $Applications.includeApplications
-        if ($AppId -contains 'All') {
-            return 'All cloud apps'
+    $Apps = $Policy.conditions.applications.includeApplications | ForEach-Object {
+        switch ($_) {
+            'All' { 'AllApps' }
+            'Office365' { 'O365' }
+            'MicrosoftAdminPortals' { 'AdminPortals' }
+            '00000002-0000-0ff1-ce00-000000000000' { 'EXO' }
+            '00000003-0000-0ff1-ce00-000000000000' { 'SPO' }
+            'd4ebce55-015a-49b5-a083-c84d1797ae8c' { 'IntuneEnrollment' }
+            default {  
+                Write-Warning "Unrecognized AppId '$_' in policy '$($Policy.displayName)'"
+                'UnknownApp'
+            }
         }
-        if ($AppId.count -gt 1) {
-            return 'Multiple apps'
-        }
-        if ($AppId -contains 'Office365') {
-            return 'Office 365'
-        }
-        if ($AppId -contains 'MicrosoftAdminPortals') {
-            return 'Microsoft Admin Portals'
-        }
-        try {
-            $SpLookup = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/$GraphVersion/servicePrincipals?`$filter=appId eq '$AppId'" -Verbose:$false
-            return $SpLookup.value.displayName
-        }
-        catch {
-            throw 'Unknown app'
-            return 'Unknown app'
-        }        
+    }
+    if ($Apps) {
+        return $Apps -join '&'
     }
 
     # Resolve user action
-    if ($Applications.includeUserActions) {
-        if ($Applications.includeUserActions -contains 'urn:user:registerdevice' ) {
-            return 'Register or join devices'
+    $Actions = $Policy.conditions.applications.includeUserActions | ForEach-Object {
+        switch ($_) {
+            'urn:user:registerdevice' { 'DeviceReg' }
+            'urn:user:registersecurityinfo' { 'SecInfoReg' }
+            default {  
+                Write-Warning "Unrecognized UserAction '$_' in policy '$($Policy.displayName)'"
+                'UnknownAction'
+            }
         }
-        if ($Applications.includeUserActions -contains 'urn:user:registersecurityinfo' ) {
-            return 'Register security information'
-        }
-        throw 'Unknown user action'
-        return 'Unknown action'
+    }
+    if ($Actions) {
+        return $Actions -join '&'
     }
 
-    Write-Warning "Could not resolve application or action from $($Applications | ConvertTo-Json -Compress)"
-    return 'Unresolved app or action'
+    Write-Warning "Could not resolve application or action from $($Policy.conditions.applications | ConvertTo-Json -Compress) in policy '$($Policy.displayName)'"
+    return 'UnknownAppOrAction'
 }
 
-function Resolve-CaResponse {
+function Resolve-CaPlatform {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [hashtable]
+        $Policy
+    )
+
+    $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
+    
+    # If no platforms are specified, all platforms are included
+    if ($null -eq $IncludePlatforms) {
+        return 'AllPlatforms'
+    }
+
+    # If all platforms is specified, it may to exclude some platforms
+    if ($IncludePlatforms -contains 'all') {
+        $Platforms = $Policy.conditions.platforms?.excludePlatforms | ForEach-Object {
+            switch ($_) {
+                'iOS' { 'iOS' }
+                'Android' { 'Android' }
+                'Windows' { 'Windows' }
+                'macOS' { 'macOS' }
+                default {  
+                    Write-Warning "Unrecognized Platform '$_' in policy '$($Policy.displayName)'"
+                    'UnknownPlatform'
+                }
+            }
+        }
+        if ($Platforms.count -eq 4) {
+            return 'UnknownPlatforms'
+        }
+        if ($Platforms.count -gt 0) {
+            return 'AllExcept' + ($Platforms -join '&')
+        }
+        return 'AllPlatforms'
+    }
+
+    $Platforms = $Policy.conditions.platforms?.includePlatforms | ForEach-Object {
+        switch ($_) {
+            'all' { 'AllPlatforms' }
+            'iOS' { 'iOS' }
+            'Android' { 'Android' }
+            'Windows' { 'Windows' }
+            'macOS' { 'macOS' }
+            default {  
+                Write-Warning "Unrecognized Platform '$_' in policy '$($Policy.displayName)'"
+                'UnknownPlatform'
+            }
+        }
+    }
+
+    return $Platforms -join '&'
+}
+
+
+function Resolve-CaGrant {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -126,21 +178,21 @@ function Resolve-CaResponse {
     $BuiltInControls = $GrantControls | Select-Object -ExpandProperty builtInControls
     if ($BuiltInControls) {
         if ($BuiltInControls -contains 'block') {
-            $Controls += 'Block access'
+            $Controls += 'Block'
         }
         if ($BuiltInControls -contains 'mfa') {
-            $Controls += 'Require MFA'
+            $Controls += 'MFA'
         }
         if ($BuiltInControls -contains 'compliantApplication') {
             $Controls += 'Require app protection policy'
         }
         if ($BuiltInControls -contains 'compliantDevice') {
-            $Controls += 'Require compliant device'
+            $Controls += 'Compliant'
         }
     }
     $AuthenticationStrength = $GrantControls | Select-Object -ExpandProperty authenticationStrength
     if ($AuthenticationStrength) {
-        $Controls += "Require auth strength '$($AuthenticationStrength.displayName)'"
+        $Controls += "AuthStrength"
     }
 
     # Resolve session controls
@@ -155,10 +207,10 @@ function Resolve-CaResponse {
     if ($SignInFrequency) {
         if ($SignInFrequency.isEnabled) {
             if ($SignInFrequency.frequencyInterval -eq 'timeBased') {
-                $Controls += "Sign-in frequency '$($SignInFrequency.value) $($SignInFrequency.type)'"
+                $Controls += "SigninFreq$($SignInFrequency.value)$($SignInFrequency.type[0])"
             }
             else {
-                $Controls += "Sign-in frequency 'Every time'"
+                $Controls += 'SigninEveryTime'
             }
         }
     }
@@ -175,14 +227,14 @@ function Resolve-CaResponse {
 
 
     if ($Controls.count -gt 0) {
-        return $Controls -join ', '
+        return $Controls -join '&'
     }
 
     throw 'UNRESOLVED RESPONSE'
     return 'UNRESOLVED RESPONSE'
 }
 
-function Resolve-CaPrincipal {
+function Resolve-CaPersona {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -191,7 +243,7 @@ function Resolve-CaPrincipal {
     )
 
     if ($Policy.conditions.users.includeUsers -contains 'All') {
-        return 'Everyone'
+        return 'Global'
     }
 
     if ($Policy.conditions.users.includeRoles) {
@@ -203,7 +255,7 @@ function Resolve-CaPrincipal {
     }
 
     #$Policy.conditions.users | ConvertTo-Json -Compress | Write-Host 
-    return 'Specific Users'
+    return 'Internals'
 }
 
 function Resolve-CaCondition {
@@ -296,16 +348,16 @@ if ($MsManagedCount -gt 0) {
 }
 
 # Determine if a CA99 / CA999 serial number standard is in use
-$PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern '^CA\d{2,3}' 
+$PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern '^CA\d{2,3}'
 if ($PoliciesWithCaSn) {
     if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
         $SnLength = $PoliciesWithCaSn.Matches | Select-Object -ExpandProperty Length -Unique | Select-Object -First 1
         $SnStandardDetected = $true
         if ($SnLength -eq 4) {
-            $SnForNewPolicies = 'CA99'
+            $SnForNewPolicies = 'CAxx'
         }
         else {
-            $SnForNewPolicies = 'CA999'
+            $SnForNewPolicies = 'CAxxx'
         }
         Write-Verbose "Detected that a serial number standard is in use, using $SnForNewPolicies for policies without a serial number."
     }
@@ -322,38 +374,68 @@ foreach ($MgPolicy in $MgPolicies) {
 
         Write-Host $MgPolicy.displayName -ForegroundColor Cyan
 
+        # Initialize recommended policy name
+        $RecommendedPolicyName = $PolicyNameTemplate  
+
         # Determine serial number
-        if ($SnStandardDetected) {
-            $ExistingSn = ($MgPolicy.displayName | Select-String -Pattern '^CA\d{2,3}')
-            if ($ExistingSn) {
-                $SerialNumber = $ExistingSn.Matches.Value
+        if ($RecommendedPolicyName.Contains('<SerialNumber>')) {
+            if ($SnStandardDetected) { 
+                $ExistingSn = ($MgPolicy.displayName | Select-String -Pattern '^CA\d{2,3}')
+                if ($ExistingSn) {
+                    $SerialNumber = $ExistingSn.Matches.Value
+                }
+                else {
+                    $SerialNumber = $SnForNewPolicies
+                }
             }
             else {
-                $SerialNumber = $SnForNewPolicies
+                $SerialNumber = 'CA' + '{0:D2}' -f $SnIndex
+                $SnIndex++
             }
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<SerialNumber>', $SerialNumber 
         }
-        else {
-            $SerialNumber = 'CA' + '{0:D2}' -f $SnIndex
-            $SnIndex++
+    
+        if ($RecommendedPolicyName.Contains('<Persona>')) {
+            $Persona = Resolve-CaPersona -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Persona>', $Persona
+        }
+
+        if ($RecommendedPolicyName.Contains('<PolicyType>')) {
+            # TODO: Resolve policy type
+        }
+
+        if ($RecommendedPolicyName.Contains('<TargetResource>')) {
+            $TargetResource = Resolve-CaTargetResource -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<TargetResource>', $TargetResource
+        }
+
+        if ($RecommendedPolicyName.Contains('<Platform>')) {
+            $Platform = Resolve-CaPlatform -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Platform>', $Platform
+        }
+
+        if ($RecommendedPolicyName.Contains('<Grant>')) {
+            $Grant = Resolve-CaGrant -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Grant>', $Grant
         }
 
         # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
 
         # Resolve policy components
         # TODO: Some policies might have multiple responses, applications, principals, conditions - need to handle those better
-        $CloudApp = Resolve-CaApplication -Policy $MgPolicy
-        $Response = Resolve-CaResponse -Policy $MgPolicy
-        $Principal = Resolve-CaPrincipal -Policy $MgPolicy
-        $Conditions = Resolve-CaCondition -Policy $MgPolicy -NamedLocations $MgLocations
+        #$CloudApp = Resolve-CaApplication -Policy $MgPolicy
+        #$Response = Resolve-CaResponse -Policy $MgPolicy
+        #$Principal = Resolve-CaPrincipal -Policy $MgPolicy
+        #$Conditions = Resolve-CaCondition -Policy $MgPolicy -NamedLocations $MgLocations
 
         # Construct recommended policy name
-        $RecommendedPolicyName = $PolicyNameTemplate -replace '<SerialNumber>', $SerialNumber -replace '<CloudApp>', $CloudApp -replace '<Response>', $Response -replace '<Principal>', $Principal 
+        <#        $RecommendedPolicyName = $PolicyNameTemplate -replace '<SerialNumber>', $SerialNumber -replace '<CloudApp>', $CloudApp -replace '<Response>', $Response -replace '<Principal>', $Principal 
         if ($Conditions) {
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Conditions>', $Conditions
         }
         else {
             $RecommendedPolicyName = $RecommendedPolicyName -replace ' When <Conditions>', ''
-        }
+        } #>
         
         # TODO: Maximum length check (128 characters)
 
