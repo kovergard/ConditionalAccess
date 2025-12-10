@@ -91,8 +91,8 @@ function Resolve-CaTargetResource {
     # Resolve user action
     $Actions = $Policy.conditions.applications.includeUserActions | ForEach-Object {
         switch ($_) {
-            'urn:user:registerdevice' { 'DeviceReg' }
-            'urn:user:registersecurityinfo' { 'SecInfoReg' }
+            'urn:user:registerdevice' { 'RegisterOrJoin' }
+            'urn:user:registersecurityinfo' { 'SecurityInfo' }
             default {  
                 Write-Warning "Unrecognized UserAction '$_' in policy '$($Policy.displayName)'"
                 'UnknownAction'
@@ -118,48 +118,12 @@ function Resolve-CaPlatform {
     $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
     
     # If no platforms are specified, all platforms are included
-    if ($null -eq $IncludePlatforms) {
-        return 'AllPlatforms'
+    if ($null -eq $IncludePlatforms -or $IncludePlatforms -contains 'all') {
+        return 'AnyPlatform'
     }
 
-    # If all platforms is specified, it may to exclude some platforms
-    if ($IncludePlatforms -contains 'all') {
-        $Platforms = $Policy.conditions.platforms?.excludePlatforms | ForEach-Object {
-            switch ($_) {
-                'iOS' { 'iOS' }
-                'Android' { 'Android' }
-                'Windows' { 'Windows' }
-                'macOS' { 'macOS' }
-                default {  
-                    Write-Warning "Unrecognized Platform '$_' in policy '$($Policy.displayName)'"
-                    'UnknownPlatform'
-                }
-            }
-        }
-        if ($Platforms.count -eq 4) {
-            return 'UnknownPlatforms'
-        }
-        if ($Platforms.count -gt 0) {
-            return 'AllExcept' + ($Platforms -join '&')
-        }
-        return 'AllPlatforms'
-    }
-
-    $Platforms = $Policy.conditions.platforms?.includePlatforms | ForEach-Object {
-        switch ($_) {
-            'all' { 'AllPlatforms' }
-            'iOS' { 'iOS' }
-            'Android' { 'Android' }
-            'Windows' { 'Windows' }
-            'macOS' { 'macOS' }
-            default {  
-                Write-Warning "Unrecognized Platform '$_' in policy '$($Policy.displayName)'"
-                'UnknownPlatform'
-            }
-        }
-    }
-
-    return $Platforms -join '&'
+    # Return included platforms
+    return $IncludePlatforms -join '&'
 }
 
 
@@ -192,7 +156,7 @@ function Resolve-CaGrant {
     }
     $AuthenticationStrength = $GrantControls | Select-Object -ExpandProperty authenticationStrength
     if ($AuthenticationStrength) {
-        $Controls += "AuthStrength"
+        $Controls += 'AuthStrength'
     }
 
     # Resolve session controls
@@ -329,6 +293,32 @@ function Resolve-CaCondition {
     return 'No conditions'
 }
 
+function Resolve-CaOptional {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [hashtable]
+        $Policy,
+
+        [Parameter(Mandatory)]
+        [PSCustomObject]
+        $NamedLocations
+    )
+
+    $OptionalComponents = @()
+
+    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
+    if ($AuthenticationStrength) {
+        $OptionalComponents += $AuthenticationStrength.displayName
+        $AuthenticationStrength | ConvertTo-Json -Depth 3 | Write-Host
+    }
+
+
+    return $OptionalComponents
+    
+}
+
+
 #endregion
 
 #region MAIN
@@ -419,6 +409,16 @@ foreach ($MgPolicy in $MgPolicies) {
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Grant>', $Grant
         }
 
+        if ($RecommendedPolicyName.Contains('<Optional>')) {
+            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
+            if ($OptionalComponents) {   
+                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
+            }
+            else {
+                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
+            }
+        }
+
         # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
 
         # Resolve policy components
@@ -442,10 +442,10 @@ foreach ($MgPolicy in $MgPolicies) {
         # Output resultning object
         [PSCustomObject]@{
             #Id                    = $MgPolicy.id
-            #CurrentPolicyName     = $MgPolicy.displayName
+            CurrentPolicyName     = $MgPolicy.displayName
             RecommendedPolicyName = $RecommendedPolicyName
-            NameLength            = $RecommendedPolicyName.Length
-            ComplianceStatus      = 'TODO'
+            #NameLength            = $RecommendedPolicyName.Length
+            #ComplianceStatus      = 'TODO'
         }   
     }
     catch {
