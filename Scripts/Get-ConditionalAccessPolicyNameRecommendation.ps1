@@ -32,6 +32,26 @@ Set-StrictMode -Version Latest
 
 #region Internal functions
 
+
+function Convert-ToPascalCase {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$InputString
+    )
+
+    process {
+        # Split on any non-alphanumeric group, drop empties, then capitalize each token
+        $tokens = $InputString -split '[^A-Za-z0-9]+' | Where-Object { $_.Length -gt 0 }
+
+        # Capitalize: first char upper, rest lower (digits are kept as-is)
+        ($tokens | ForEach-Object {
+            if ($_.Length -eq 1) { $_.ToUpper() }
+            else { $_.Substring(0, 1).ToUpper() + $_.Substring(1).ToLower() }
+        }) -join ''
+    }
+}
+
 function Confirm-GraphConnection {
     [CmdletBinding()]
     param (
@@ -77,7 +97,15 @@ function Resolve-CaTargetResource {
             'MicrosoftAdminPortals' { 'AdminPortals' }
             '00000002-0000-0ff1-ce00-000000000000' { 'EXO' }
             '00000003-0000-0ff1-ce00-000000000000' { 'SPO' }
-            'd4ebce55-015a-49b5-a083-c84d1797ae8c' { 'IntuneEnrollment' }
+            '00000003-0000-0000-c000-000000000000' { 'MicrosoftGraph' }      
+            '00000009-0000-0000-c000-000000000000' { 'PowerBI' }             
+            '1fec8e78-bce4-4aaf-ab1b-5451cc387264' { 'Teams' }               
+            'd4ebce55-015a-49b5-a083-c84d1797ae8c' { 'IntuneEnrollment' }            
+            '797f4846-ba00-4fd7-ba43-dac1f8f63013' { 'AzureResourceManager' }
+            '499b84ac-1321-427f-aa17-267ca6975798' { 'AzureDevOps' }         
+            '04b07795-8ddb-461a-bbee-02f9e1bf7b46' { 'AzureCLI' }            
+            '1950a258-227b-4e31-a9cf-717495945fc2' { 'AzurePowerShell' }     
+            'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' { 'AzurePortal' }            
             default {  
                 Write-Warning "Unrecognized AppId '$_' in policy '$($Policy.displayName)'"
                 'UnknownApp'
@@ -194,8 +222,8 @@ function Resolve-CaGrant {
         return $Controls -join '&'
     }
 
-    throw 'UNRESOLVED RESPONSE'
-    return 'UNRESOLVED RESPONSE'
+    throw 'UNRESOLVED GRANT'
+    return 'UNRESOLVED GRANT'
 }
 
 function Resolve-CaPersona {
@@ -222,6 +250,7 @@ function Resolve-CaPersona {
     return 'Internals'
 }
 
+<#
 function Resolve-CaCondition {
     [CmdletBinding()]
     param (
@@ -292,6 +321,7 @@ function Resolve-CaCondition {
 
     return 'No conditions'
 }
+#>
 
 function Resolve-CaOptional {
     [CmdletBinding()]
@@ -309,8 +339,7 @@ function Resolve-CaOptional {
 
     $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
     if ($AuthenticationStrength) {
-        $OptionalComponents += $AuthenticationStrength.displayName
-        $AuthenticationStrength | ConvertTo-Json -Depth 3 | Write-Host
+        $OptionalComponents += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
     }
 
 
