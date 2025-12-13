@@ -25,16 +25,8 @@ $GRAPH_SCOPES = @(
     'Group.Read.All'
 )
 
-# Description strings for the individual components
-$CA_COMPONENT = @{
-    SerialNumber   = 'CAxx or CAxxx'
-    Persona        = 'Global | Admins | Guests | Internals'
-    PolicyType     = 'TODO'
-    TargetResource = 'AppId or UserAction'
-    Platform       = 'AnyPlatform | iOS&Android | Windows | macOS | Linux | Browser'
-    Grant          = 'Block | MFA | Compliant | Require app protection policy | AuthStrength | SigninFreq{n}{H|D|W|M} | SigninEveryTime | Use app enforced restrictions | Persistent browser {always|never|allow}'
-    Optional       = 'AuthStrength name | NamedLocation names'
-}
+# Serial number regex for detection
+$CA_SERIAL_NUMBER_REGEX = '^CA\d{3,4}'
 
 # Persona definitions
 $CA_PERSONA = @(
@@ -126,27 +118,29 @@ $CA_USERACTION = @{
     'urn:user:registersecurityinfo' = 'SecurityInfo' 
 }
 
-$CA_AND_DESIGNATOR = '&'
-$CA_OR_DESIGNATOR = '/'
+$CA_GRANT = @{
+    'block'                 = 'Block'
+    'mfa'                   = 'MFA'
+    'compliantDevice'       = 'Compliant'
+    'compliantApplication'  = 'RequireAppProtectionPolicy'
+}
+
+$CA_AND_DELIMITER = '&'
+$CA_OR_DELIMITER = '/'
 
 #endregion
 
 #region Initialize
 
-# Always stop on errors
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'     # Always stop on errors
+Set-StrictMode -Version Latest      # Enforce strict mode
 
-# Enforce strict mode
-Set-StrictMode -Version Latest
-
-# Define cache
-$MgGroupCache = @()
-
+$MgGroupCache = @()                 # Define cache
+$SerialNumbersInUse = @()           # Track used serial numbers
 
 #endregion
 
 #region Internal functions
-
 
 function Convert-ToPascalCase {
     [CmdletBinding()]
@@ -270,6 +264,50 @@ function Resolve-CaPersona {
     return $CA_PERSONA | Where-Object { $_['MatchUnknown'] -eq $true }
 }
 
+function Resolve-CaSerialNumber {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [hashtable]
+        $Policy,
+
+        [Parameter(Mandatory)]
+        [string]
+        $Prefix
+    )
+
+    # Check if existing serial number can be reused
+    $ExistingSn = ($Policy.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
+    if ($ExistingSn) {
+        $SerialNumber = $ExistingSn.Matches.Value
+        if ($SerialNumber.StartsWith($Prefix)) {
+            return $SerialNumber
+        }
+    }
+
+    # Check existing serial numbers in use
+    $ExistingSerialsForPrefix = $SerialNumbersInUse | Where-Object { $_ -like "$Prefix*" } | Sort-Object
+
+    if ($null -ne $ExistingSerialsForPrefix) {
+        # Reuse the lowest available serial number
+        $LastSerial = @($ExistingSerialsForPrefix)[-1]
+        $LastSerialNumber = [int]($LastSerial.Substring($Prefix.Length))
+        $NewSerialNumber = $LastSerialNumber + 1
+    }
+    else {
+        # Start new serial numbering
+        $NewSerialNumber = 1
+    }
+
+    # Construct new serial number
+    $NewSerial = "$Prefix{0:D2}" -f $NewSerialNumber
+
+    # Track new serial number as used
+    $Script:SerialNumbersInUse += $NewSerial
+
+    return $NewSerial
+}
+
 
 function Resolve-CaTargetResource {
     [CmdletBinding()]
@@ -290,7 +328,7 @@ function Resolve-CaTargetResource {
         }
     }
     if ($Apps) {
-        return $Apps -join $CA_OR_DESIGNATOR
+        return $Apps -join $CA_AND_DELIMITER
     }
 
     # Resolve user actions
@@ -304,7 +342,7 @@ function Resolve-CaTargetResource {
         }
     }
     if ($Actions) {
-        return $Actions -join $CA_OR_DESIGNATOR
+        return $Actions -join $CA_AND_DELIMITER
     }
 
     Write-Warning "Could not resolve application or action from $($Policy.conditions.applications | ConvertTo-Json -Compress) in policy '$($Policy.displayName)'"
@@ -327,7 +365,7 @@ function Resolve-CaPlatform {
     }
 
     # Return included platforms
-    return $IncludePlatforms -join '&'
+    return $IncludePlatforms -join $CA_AND_DELIMITER
 }
 
 
@@ -395,7 +433,7 @@ function Resolve-CaGrant {
 
 
     if ($Controls.count -gt 0) {
-        return $Controls -join '&'
+        return $Controls -join $CA_AND_DELIMITER
     }
 
     throw 'UNRESOLVED GRANT'
@@ -518,25 +556,16 @@ if ($MsManagedCount -gt 0) {
     $MgPolicies = $MgPolicies | Where-Object { -not $_.templateId }
 }
 
-# Determine if a CA99 / CA999 serial number standard is in use
-$PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern '^CA\d{2,3}'
+# Determine if a CA999 / CA9999 serial number standard is in use
+$PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX
 if ($PoliciesWithCaSn) {
     if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
-        $SnLength = $PoliciesWithCaSn.Matches | Select-Object -ExpandProperty Length -Unique | Select-Object -First 1
-        $SnStandardDetected = $true
-        if ($SnLength -eq 4) {
-            $SnForNewPolicies = 'CAxx'
-        }
-        else {
-            $SnForNewPolicies = 'CAxxx'
-        }
-        Write-Verbose "Detected that a serial number standard is in use, using $SnForNewPolicies for policies without a serial number."
+        $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
+        Write-Verbose "Detected existing serial numbers. Will reuse serial numbers, if they match the personas."
     }
 }
-else {
-    Write-Verbose 'No serial number standard detected, all policies will get new serials, starting with CA01.'
-    $SnStandardDetected = $false
-    $SnIndex = 1
+if ($SerialNumbersInUse.count -eq 0) {
+    Write-Verbose 'No serial numbers detected. All policies will get new serials.'
 }
 
 # Process each policy
@@ -555,19 +584,7 @@ foreach ($MgPolicy in $MgPolicies) {
 
         # Determine serial number
         if ($RecommendedPolicyName.Contains('<SerialNumber>')) {
-            if ($SnStandardDetected) { 
-                $ExistingSn = ($MgPolicy.displayName | Select-String -Pattern '^CA\d{2,3}')
-                if ($ExistingSn) {
-                    $SerialNumber = $ExistingSn.Matches.Value
-                }
-                else {
-                    $SerialNumber = $SnForNewPolicies
-                }
-            }
-            else {
-                $SerialNumber = 'CA' + '{0:D2}' -f $SnIndex
-                $SnIndex++
-            }
+            $SerialNumber = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix $Persona.SerialPrefix
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<SerialNumber>', $SerialNumber 
         }
     
