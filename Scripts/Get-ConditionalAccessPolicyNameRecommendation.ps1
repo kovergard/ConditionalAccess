@@ -18,6 +18,13 @@ param(
 # At this time, the beta endpoint must be used to read newer features, like Continuous Access Evaluation
 $GRAPH_VERSION = 'beta'
 
+# Scopes needed for Graph access
+$GRAPH_SCOPES = @(
+    'Policy.Read.All',
+    'Application.Read.All'
+    'Group.Read.All'
+)
+
 # Description strings for the individual components
 $CA_COMPONENT = @{
     SerialNumber   = 'CAxx or CAxxx'
@@ -96,7 +103,7 @@ $CA_PERSONA = @(
         MatchUnknown   = $true
     }
 )
-
+ 
 #endregion
 
 #region Initialize
@@ -106,6 +113,10 @@ $ErrorActionPreference = 'Stop'
 
 # Enforce strict mode
 Set-StrictMode -Version Latest
+
+# Define cache
+$MgGroupCache = @()
+
 
 #endregion
 
@@ -311,22 +322,53 @@ function Resolve-CaPersona {
         [Parameter(Mandatory)]
         [hashtable]
         $Policy
+    
     )
-
-    if ($Policy.conditions.users.includeUsers -contains 'All') {
+        if ($Policy.conditions.users.includeUsers -contains 'All') {
         return 'Global'
     }
 
-    if ($Policy.conditions.users.includeRoles) {
-        return 'Admins'
+    if ($Policy.conditions.users.includeGroups)
+    {
+        foreach ($GroupId in $Policy.conditions.users.includeGroups) {
+            # Check cache first
+            $CachedGroup = $MgGroupCache | Where-Object { $_.Id -eq $GroupId }
+            if ($CachedGroup) {
+                $Group = $CachedGroup
+            }
+            else {
+                # Fetch group from Graph
+                try {
+                    $Group = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/groups/$GroupId" -Verbose:$false
+                    # Cache it
+                    $MgGroupCache += $Group
+                }
+                catch {
+                    Write-Warning "Could not retrieve group with ID '$GroupId' from Graph: $_"
+                    continue
+                }
+            }
+
+            # Check if group matches any persona
+            foreach ($PersonaDef in $CA_PERSONA) {
+                if ($Group.displayName -eq $PersonaDef.EntraGroupName) {
+                    return $PersonaDef.Name
+                }
+            }
+        }
     }
 
-    if ($Policy.conditions.users.includeGuestsOrExternalUsers) {
-        return 'Guests'
-    }
+
+#    if ($Policy.conditions.users.includeRoles) {
+#        return 'Admins'
+#    }
+
+#    if ($Policy.conditions.users.includeGuestsOrExternalUsers) {
+#        return 'Guests'
+#    }
 
     #$Policy.conditions.users | ConvertTo-Json -Compress | Write-Host 
-    return 'Internals'
+    return 'Unknown'
 }
 
 <#
@@ -432,7 +474,7 @@ function Resolve-CaOptional {
 #region MAIN
 
 # Check if connected to Microsoft Graph
-$MgContext = Confirm-GraphConnection -RequiredScopes 'Policy.Read.All', 'Application.Read.All'
+$MgContext = Confirm-GraphConnection -RequiredScopes $GRAPH_SCOPES
 
 # Fetch Conditional Access policies
 $MgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
@@ -470,7 +512,7 @@ else {
 foreach ($MgPolicy in $MgPolicies) {
     try {
 
-        Write-Host $MgPolicy.displayName -ForegroundColor Cyan
+        # Write-Host $MgPolicy.displayName -ForegroundColor Cyan
 
         # Initialize recommended policy name
         $RecommendedPolicyName = $PolicyNameTemplate  
