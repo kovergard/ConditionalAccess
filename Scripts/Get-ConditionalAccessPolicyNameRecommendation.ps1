@@ -13,10 +13,89 @@ param(
 
 # Tempoary
 
-#region Internal variables
+#region Configuration
 
-# At time of script authoring, the beta endpoint had be used to read newer features, like Continuous Access Evaluation
-$GraphVersion = 'beta'
+# At this time, the beta endpoint must be used to read newer features, like Continuous Access Evaluation
+$GRAPH_VERSION = 'beta'
+
+# Description strings for the individual components
+$CA_COMPONENT = @{
+    SerialNumber   = 'CAxx or CAxxx'
+    Persona        = 'Global | Admins | Guests | Internals'
+    PolicyType     = 'TODO'
+    TargetResource = 'AppId or UserAction'
+    Platform       = 'AnyPlatform | iOS&Android | Windows | macOS | Linux | Browser'
+    Grant          = 'Block | MFA | Compliant | Require app protection policy | AuthStrength | SigninFreq{n}{H|D|W|M} | SigninEveryTime | Use app enforced restrictions | Persistent browser {always|never|allow}'
+    Optional       = 'AuthStrength name | NamedLocation names'
+}
+
+# Persona definitions
+$CA_PERSONA = @(
+    @{
+        Name           = 'Global'
+        EntraGroupName = 'CA-Persona-Global'
+        SerialPrefix   = 'CA0'
+        MatchAll       = $true
+    }
+    @{
+        Name           = 'Admins'
+        EntraGroupName = 'CA-Persona-Admins'
+        SerialPrefix   = 'CA1'
+        MatchRoles     = $true
+    }
+    @{
+        Name           = 'Internals' 
+        EntraGroupName = 'CA-Persona-Internals'
+        SerialPrefix   = 'CA2'
+    }
+    @{
+        Name           = 'Externals' 
+        EntraGroupName = 'CA-Persona-Externals'
+        SerialPrefix   = 'CA3'
+    }
+    @{
+        Name           = 'Guests'
+        EntraGroupName = 'CA-Persona-Guests'
+        SerialPrefix   = 'CA4'
+        MatchGuests    = $true
+    }
+    @{
+        Name           = 'GuestAdmins'
+        EntraGroupName = 'CA-Persona-GuestAdmins'
+        SerialPrefix   = 'CA5'
+    }
+    @{
+        Name           = 'Microsoft365ServiceAccounts'
+        EntraGroupName = 'CA-Persona-Microsoft365ServiceAccounts'
+        SerialPrefix   = 'CA6'
+    }
+    @{
+        Name           = 'AzureServiceAccounts'
+        EntraGroupName = 'CA-Persona-AzureServiceAccounts'
+        SerialPrefix   = 'CA7'
+    }
+    @{
+        Name           = 'CorpServiceAccounts'
+        EntraGroupName = 'CA-Persona-CorpServiceAccounts'
+        SerialPrefix   = 'CA8'
+    }
+    @{
+        Name           = 'WorkloadIdentities'
+        EntraGroupName = 'CA-Persona-WorkloadIdentities'
+        SerialPrefix   = 'CA9'
+    }
+    @{
+        Name           = 'Developers'
+        EntraGroupName = 'CA-Persona-Developers'
+        SerialPrefix   = 'CA10'
+    }
+    @{
+        Name           = 'Unknown'
+        EntraGroupName = 'CA-Persona-Unknown'
+        SerialPrefix   = 'CAx'
+        MatchUnknown   = $true
+    }
+)
 
 #endregion
 
@@ -356,8 +435,8 @@ function Resolve-CaOptional {
 $MgContext = Confirm-GraphConnection -RequiredScopes 'Policy.Read.All', 'Application.Read.All'
 
 # Fetch Conditional Access policies
-$MgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GraphVersion/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
-$MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GraphVersion/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
+$MgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
+$MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
 
 # Remove Microsoft-managed policies
 $MsManagedCount = ($MgPolicies | Where-Object { $_.templateId }).count
