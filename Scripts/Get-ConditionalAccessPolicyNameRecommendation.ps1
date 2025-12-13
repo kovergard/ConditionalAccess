@@ -103,7 +103,32 @@ $CA_PERSONA = @(
         MatchUnknown   = $true
     }
 )
- 
+
+$CA_APP = @{
+    'All'                                  = 'AllApps' 
+    'Office365'                            = 'O365' 
+    'MicrosoftAdminPortals'                = 'AdminPortals' 
+    '00000002-0000-0ff1-ce00-000000000000' = 'EXO' 
+    '00000003-0000-0ff1-ce00-000000000000' = 'SPO' 
+    '00000003-0000-0000-c000-000000000000' = 'MicrosoftGraph' 
+    '00000009-0000-0000-c000-000000000000' = 'PowerBI'        
+    '1fec8e78-bce4-4aaf-ab1b-5451cc387264' = 'Teams'               
+    'd4ebce55-015a-49b5-a083-c84d1797ae8c' = 'IntuneEnrollment'            
+    '797f4846-ba00-4fd7-ba43-dac1f8f63013' = 'AzureResourceManager' 
+    '499b84ac-1321-427f-aa17-267ca6975798' = 'AzureDevOps'
+    '04b07795-8ddb-461a-bbee-02f9e1bf7b46' = 'AzureCLI' 
+    '1950a258-227b-4e31-a9cf-717495945fc2' = 'AzurePowerShell'
+    'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' = 'AzurePortal'
+}
+
+$CA_USERACTION = @{
+    'urn:user:registerdevice'       = 'RegisterOrJoin'
+    'urn:user:registersecurityinfo' = 'SecurityInfo' 
+}
+
+$CA_AND_DESIGNATOR = '&'
+$CA_OR_DESIGNATOR = '/'
+
 #endregion
 
 #region Initialize
@@ -171,6 +196,81 @@ function Confirm-GraphConnection {
     return $MgContext
 }
 
+function Get-EntraIdGroup {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]
+        $GroupId
+    )
+
+    # Check cache first
+    $CachedGroup = $MgGroupCache | Where-Object { $_.id -eq $GroupId }
+    if ($CachedGroup) {
+        return $CachedGroup
+    }
+
+    # Fetch group from Graph
+    $Group = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/groups/$GroupId" -Verbose:$false
+
+    if (-not $Group) {
+        Write-Warning "Could not retrieve group with ID '$GroupId' from Microsoft Graph."
+        return
+    }
+
+    # Cache group
+    $Script:MgGroupCache += $Group
+
+    # Return group
+    return $Group
+}
+
+function Resolve-CaPersona {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [hashtable]
+        $Policy
+    
+    )
+
+    # Check for 'All users' inclusion
+    if ($Policy.conditions.users.includeUsers -contains 'All') {
+        return $CA_PERSONA | Where-Object { $_['MatchAll'] -eq $true }
+    }
+
+    # Check included groups
+    if ($Policy.conditions.users.includeGroups) {
+        foreach ($GroupId in $Policy.conditions.users.includeGroups) {
+            
+            # Get group from Entra ID
+            $Group = Get-EntraIdGroup -GroupId $GroupId
+            if ($null -eq $Group) {
+                continue
+            }
+
+            # Check if group matches any persona
+            foreach ($PersonaDef in $CA_PERSONA) {
+                if ($Group.displayName -eq $PersonaDef.EntraGroupName) {
+                    return $PersonaDef
+                }
+            }
+        }
+    }
+
+    # Check for role-based or guest/external user inclusion
+    if ($Policy.conditions.users.includeRoles) {
+        return $CA_PERSONA | Where-Object { $_['MatchRoles'] -eq $true }
+    }
+    if ($Policy.conditions.users.includeGuestsOrExternalUsers) {
+        return $CA_PERSONA | Where-Object { $_['MatchGuests'] -eq $true }
+    }
+
+    # Fallback to Unknown persona
+    return $CA_PERSONA | Where-Object { $_['MatchUnknown'] -eq $true }
+}
+
+
 function Resolve-CaTargetResource {
     [CmdletBinding()]
     param (
@@ -179,46 +279,32 @@ function Resolve-CaTargetResource {
         $Policy
     )
 
-    # Resolve cloud app
+    # Resolve cloud apps
     $Apps = $Policy.conditions.applications.includeApplications | ForEach-Object {
-        switch ($_) {
-            'All' { 'AllApps' }
-            'Office365' { 'O365' }
-            'MicrosoftAdminPortals' { 'AdminPortals' }
-            '00000002-0000-0ff1-ce00-000000000000' { 'EXO' }
-            '00000003-0000-0ff1-ce00-000000000000' { 'SPO' }
-            '00000003-0000-0000-c000-000000000000' { 'MicrosoftGraph' }      
-            '00000009-0000-0000-c000-000000000000' { 'PowerBI' }             
-            '1fec8e78-bce4-4aaf-ab1b-5451cc387264' { 'Teams' }               
-            'd4ebce55-015a-49b5-a083-c84d1797ae8c' { 'IntuneEnrollment' }            
-            '797f4846-ba00-4fd7-ba43-dac1f8f63013' { 'AzureResourceManager' }
-            '499b84ac-1321-427f-aa17-267ca6975798' { 'AzureDevOps' }         
-            '04b07795-8ddb-461a-bbee-02f9e1bf7b46' { 'AzureCLI' }            
-            '1950a258-227b-4e31-a9cf-717495945fc2' { 'AzurePowerShell' }     
-            'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' { 'AzurePortal' }            
-            default {  
-                Write-Warning "Unrecognized AppId '$_' in policy '$($Policy.displayName)'"
-                'UnknownApp'
-            }
+        if ($CA_APP[$_]) {
+            $CA_APP[$_]
+        }
+        else {
+            Write-Warning "Unrecognized AppId '$_' in policy '$($Policy.displayName)'"
+            'UnknownApp'
         }
     }
     if ($Apps) {
-        return $Apps -join '&'
+        return $Apps -join $CA_OR_DESIGNATOR
     }
 
-    # Resolve user action
+    # Resolve user actions
     $Actions = $Policy.conditions.applications.includeUserActions | ForEach-Object {
-        switch ($_) {
-            'urn:user:registerdevice' { 'RegisterOrJoin' }
-            'urn:user:registersecurityinfo' { 'SecurityInfo' }
-            default {  
+        if ($CA_USERACTION[$_]) {
+            $CA_USERACTION[$_]
+        }
+        else {
                 Write-Warning "Unrecognized UserAction '$_' in policy '$($Policy.displayName)'"
                 'UnknownAction'
-            }
         }
     }
     if ($Actions) {
-        return $Actions -join '&'
+        return $Actions -join $CA_OR_DESIGNATOR
     }
 
     Write-Warning "Could not resolve application or action from $($Policy.conditions.applications | ConvertTo-Json -Compress) in policy '$($Policy.displayName)'"
@@ -314,61 +400,6 @@ function Resolve-CaGrant {
 
     throw 'UNRESOLVED GRANT'
     return 'UNRESOLVED GRANT'
-}
-
-function Resolve-CaPersona {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [hashtable]
-        $Policy
-    
-    )
-        if ($Policy.conditions.users.includeUsers -contains 'All') {
-        return 'Global'
-    }
-
-    if ($Policy.conditions.users.includeGroups)
-    {
-        foreach ($GroupId in $Policy.conditions.users.includeGroups) {
-            # Check cache first
-            $CachedGroup = $MgGroupCache | Where-Object { $_.Id -eq $GroupId }
-            if ($CachedGroup) {
-                $Group = $CachedGroup
-            }
-            else {
-                # Fetch group from Graph
-                try {
-                    $Group = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/groups/$GroupId" -Verbose:$false
-                    # Cache it
-                    $MgGroupCache += $Group
-                }
-                catch {
-                    Write-Warning "Could not retrieve group with ID '$GroupId' from Graph: $_"
-                    continue
-                }
-            }
-
-            # Check if group matches any persona
-            foreach ($PersonaDef in $CA_PERSONA) {
-                if ($Group.displayName -eq $PersonaDef.EntraGroupName) {
-                    return $PersonaDef.Name
-                }
-            }
-        }
-    }
-
-
-#    if ($Policy.conditions.users.includeRoles) {
-#        return 'Admins'
-#    }
-
-#    if ($Policy.conditions.users.includeGuestsOrExternalUsers) {
-#        return 'Guests'
-#    }
-
-    #$Policy.conditions.users | ConvertTo-Json -Compress | Write-Host 
-    return 'Unknown'
 }
 
 <#
@@ -517,6 +548,11 @@ foreach ($MgPolicy in $MgPolicies) {
         # Initialize recommended policy name
         $RecommendedPolicyName = $PolicyNameTemplate  
 
+        if ($RecommendedPolicyName.Contains('<Persona>')) {
+            $Persona = Resolve-CaPersona -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Persona>', $Persona.Name
+        }
+
         # Determine serial number
         if ($RecommendedPolicyName.Contains('<SerialNumber>')) {
             if ($SnStandardDetected) { 
@@ -535,11 +571,6 @@ foreach ($MgPolicy in $MgPolicies) {
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<SerialNumber>', $SerialNumber 
         }
     
-        if ($RecommendedPolicyName.Contains('<Persona>')) {
-            $Persona = Resolve-CaPersona -Policy $MgPolicy
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Persona>', $Persona
-        }
-
         if ($RecommendedPolicyName.Contains('<PolicyType>')) {
             # TODO: Resolve policy type
         }
