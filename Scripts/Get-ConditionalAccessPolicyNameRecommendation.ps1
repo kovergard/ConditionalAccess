@@ -6,12 +6,10 @@ param(
     # Templates string for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Grant>-<Optional>'
+    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Response>-<Optional>'
     #$PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
 )
 #requires -version 7.5.0
-
-# Tempoary
 
 #region Configuration
 
@@ -118,11 +116,26 @@ $CA_USERACTION = @{
     'urn:user:registersecurityinfo' = 'SecurityInfo' 
 }
 
-$CA_GRANT = @{
-    'block'                 = 'Block'
-    'mfa'                   = 'MFA'
-    'compliantDevice'       = 'Compliant'
-    'compliantApplication'  = 'RequireAppProtectionPolicy'
+$CA_PLATFORM = @{
+    'all'          = 'AnyPlatform'
+    'android'      = 'Android'
+    'iOS'          = 'iOS'
+    'macOS'        = 'MacOS'
+    'windowsPhone' = 'WindowsPhone'
+    'windows'      = 'Windows'
+}
+
+$CA_RESPONSE = @{
+    'Block'                     = 'Block'
+    'BlockSpecifiedLocations'    = 'BlockSpecifiedLocations'
+    'AllowOnlySpecifiedLocations'   = 'AllowOnlySpecifiedLocations'
+    'BlockUnknownPlatforms'     = 'BlockUnknownPlatforms'
+    'BLockLegacyAuthentication' = 'BlockLegacyAuth'
+    'BlockAuthenticationFlows'  = 'BlockAuthFlows'
+
+    'mfa'                       = 'MFA'
+    'compliantDevice'           = 'Compliant'
+    'compliantApplication'      = 'RequireAppProtectionPolicy'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -337,8 +350,8 @@ function Resolve-CaTargetResource {
             $CA_USERACTION[$_]
         }
         else {
-                Write-Warning "Unrecognized UserAction '$_' in policy '$($Policy.displayName)'"
-                'UnknownAction'
+            Write-Warning "Unrecognized UserAction '$_' in policy '$($Policy.displayName)'"
+            'UnknownAction'
         }
     }
     if ($Actions) {
@@ -361,15 +374,25 @@ function Resolve-CaPlatform {
     
     # If no platforms are specified, all platforms are included
     if ($null -eq $IncludePlatforms -or $IncludePlatforms -contains 'all') {
-        return 'AnyPlatform'
+        return $CA_PLATFORM['all']
+    }
+
+    $Platforms = $IncludePlatforms | ForEach-Object {
+        if ($CA_PLATFORM[$_]) {
+            $CA_PLATFORM[$_]
+        }
+        else {
+            Write-Warning "Unrecognized platform '$_' in policy '$($Policy.displayName)'"
+            'UnknownPlatform'
+        }
     }
 
     # Return included platforms
-    return $IncludePlatforms -join $CA_AND_DELIMITER
+    return $Platforms -join $CA_AND_DELIMITER
 }
 
 
-function Resolve-CaGrant {
+function Resolve-CaCombinedResponse {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -377,7 +400,15 @@ function Resolve-CaGrant {
         $Policy
     )
 
-    $Controls = @()
+    $Response = @()
+
+
+    if ($Response.count -gt 0) {
+        return $Response -join $CA_AND_DELIMITER
+    }
+
+    throw 'Find a way to resolve!'
+
 
     # Resolve grant controls
     $GrantControls = $Policy | Select-Object -ExpandProperty grantControls
@@ -561,7 +592,7 @@ $PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_
 if ($PoliciesWithCaSn) {
     if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
         $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
-        Write-Verbose "Detected existing serial numbers. Will reuse serial numbers, if they match the personas."
+        Write-Verbose 'Detected existing serial numbers. Will reuse serial numbers, if they match the personas.'
     }
 }
 if ($SerialNumbersInUse.count -eq 0) {
@@ -577,8 +608,9 @@ foreach ($MgPolicy in $MgPolicies) {
         # Initialize recommended policy name
         $RecommendedPolicyName = $PolicyNameTemplate  
 
+        $Persona = Resolve-CaPersona -Policy $MgPolicy
+
         if ($RecommendedPolicyName.Contains('<Persona>')) {
-            $Persona = Resolve-CaPersona -Policy $MgPolicy
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Persona>', $Persona.Name
         }
 
@@ -602,9 +634,9 @@ foreach ($MgPolicy in $MgPolicies) {
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Platform>', $Platform
         }
 
-        if ($RecommendedPolicyName.Contains('<Grant>')) {
-            $Grant = Resolve-CaGrant -Policy $MgPolicy
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Grant>', $Grant
+        if ($RecommendedPolicyName.Contains('<Response>')) {
+            $Response = Resolve-CaResponse -Policy $MgPolicy
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response
         }
 
         if ($RecommendedPolicyName.Contains('<Optional>')) {
