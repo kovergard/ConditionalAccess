@@ -6,8 +6,12 @@ param(
     # Templates string for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Response>-<Optional>'
-    #$PolicyNameTemplate = '<SerialNumber> - <CloudApp>: <Response> For <Principal> When <Conditions>'
+    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Response>',
+
+    # Append additional details to the recommended name
+    [Parameter()]
+    [boolean]
+    $AppendAdditionalDetails = $true
 )
 #requires -version 7.5.0
 
@@ -126,16 +130,18 @@ $CA_PLATFORM = @{
 }
 
 $CA_RESPONSE = @{
-    'Block'                     = 'Block'
-    'BlockSpecifiedLocations'    = 'BlockSpecifiedLocations'
-    'AllowOnlySpecifiedLocations'   = 'AllowOnlySpecifiedLocations'
-    'BlockUnknownPlatforms'     = 'BlockUnknownPlatforms'
-    'BLockLegacyAuthentication' = 'BlockLegacyAuth'
-    'BlockAuthenticationFlows'  = 'BlockAuthFlows'
+    'Block'                           = 'Block'
+    'BlockSpecifiedLocations'         = 'BlockSpecifiedLocations'
+    'AllowOnlySpecifiedLocations'     = 'AllowOnlySpecifiedLocations'
+    'BlockUnknownPlatforms'           = 'BlockUnknownPlatforms'
+    'BLockLegacyAuthentication'       = 'BlockLegacyAuth'
+    'BlockAuthenticationFlows'        = 'BlockAuthFlows'
+    'MFA'                             = 'MFA'
+    'ApplicationEnforcedRestrictions' = 'AppEnforcedRestrictions'
 
-    'mfa'                       = 'MFA'
-    'compliantDevice'           = 'Compliant'
-    'compliantApplication'      = 'RequireAppProtectionPolicy'
+
+    'compliantDevice'                 = 'Compliant'
+    'compliantApplication'            = 'RequireAppProtectionPolicy'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -392,19 +398,75 @@ function Resolve-CaPlatform {
 }
 
 
-function Resolve-CaCombinedResponse {
+function Resolve-CaResponse {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
         [hashtable]
-        $Policy
+        $Policy,
+
+        [Parameter(Mandatory)]
+        [PSCustomObject]
+        $NamedLocations
     )
 
-    $Response = @()
+    $Controls = @()
+    $AdditionalDetails = @()
+
+    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
+    if ($AuthenticationStrength) {
+        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
+    }
+
+    if ($Policy.conditions?.devices?.deviceFilter) {
+        $AdditionalDetails += 'DeviceFilter'
+    }
+
+    # Resolve block controls
+    if ($Policy.grantControls?.builtInControls -contains 'block') {
+        $BlockControls = @()
+        
+        # Block specified locations
+        if ($Policy.conditions.locations?.includeLocations -and $Policy.conditions.locations.includeLocations -notcontains 'All') {
+            $BlockControls += $CA_RESPONSE['BlockSpecifiedLocations']
+        }
+        elseif ($Policy.conditions.locations?.excludeLocations -and $Policy.conditions.locations.excludeLocations -notcontains 'All') {
+            $BlockControls += $CA_RESPONSE['AllowOnlySpecifiedLocations']
+        }
+
+        # Block legacy authentication  
+        if ($Policy.conditions.clientAppTypes -contains 'other' -and $Policy.conditions.clientAppTypes -contains 'exchangeActiveSync') {
+            $BlockControls += $CA_RESPONSE['BLockLegacyAuthentication']
+        }
+
+        # Block authentication flows
+        $TransferMethods = $Policy.conditions | Select-Object -ExpandProperty authenticationFlows -ErrorAction Ignore | Select-Object -ExpandProperty transferMethods -ErrorAction Ignore
+        if ($null -ne $TransferMethods -and $TransferMethods.IndexOf('deviceCodeFlow') -ge 0 -and $TransferMethods.Indexof('authenticationTransfer') -ge 0 ) {
+            $BlockControls += $CA_RESPONSE['BlockAuthenticationFlows']
+        }
+        if ($BlockControls.count -eq 0) {
+            $BlockControls += 'UNKNOWN BLOCK'
+            #$BlockControls += $CA_RESPONSE['Block'] 
+        }
+
+        $Controls += $BlockControls
+    }
+
+    # Resolve requirement controls
+    if ($Policy.grantControls?.builtInControls -contains 'mfa') {
+        $Controls += $CA_RESPONSE['mfa']
+    }
+
+    # Resolve session controls
 
 
-    if ($Response.count -gt 0) {
-        return $Response -join $CA_AND_DELIMITER
+
+    # Return responses
+    if ($Controls.count -gt 0) {
+        return [PSCustomObject]@{
+            Controls = $Controls
+            AdditionalDetails = $AdditionalDetails
+        }
     }
 
     throw 'Find a way to resolve!'
@@ -563,6 +625,10 @@ function Resolve-CaOptional {
         $OptionalComponents += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
     }
 
+    if ($Policy.conditions?.devices?.deviceFilter) {
+        $OptionalComponents += 'DeviceFilter'
+    }
+
 
     return $OptionalComponents
     
@@ -635,19 +701,19 @@ foreach ($MgPolicy in $MgPolicies) {
         }
 
         if ($RecommendedPolicyName.Contains('<Response>')) {
-            $Response = Resolve-CaResponse -Policy $MgPolicy
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response
+            $Response = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
+            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response.Controls -join $CA_AND_DELIMITER
         }
 
-        if ($RecommendedPolicyName.Contains('<Optional>')) {
-            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
-            if ($OptionalComponents) {   
-                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
-            }
-            else {
-                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
-            }
-        }
+#        if ($RecommendedPolicyName.Contains('<Optional>')) {
+#            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
+#            if ($OptionalComponents) {   
+#                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
+#            }
+#            else {
+#                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
+#            }
+#        }
 
         # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
 
@@ -680,7 +746,7 @@ foreach ($MgPolicy in $MgPolicies) {
     }
     catch {
         $_
-        $MgPolicy | ConvertTo-Json -Depth 4
+        $MgPolicy | ConvertTo-Json -Depth 5
         return 
     }        
 }
