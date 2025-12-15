@@ -100,7 +100,7 @@ $CA_PERSONA = @(
 
 $CA_APP = @{
     'All'                                  = 'AllApps' 
-    'Office365'                            = 'O365' 
+    'Office365'                            = 'Office365' 
     'MicrosoftAdminPortals'                = 'AdminPortals' 
     '00000002-0000-0ff1-ce00-000000000000' = 'EXO' 
     '00000003-0000-0ff1-ce00-000000000000' = 'SPO' 
@@ -137,11 +137,11 @@ $CA_RESPONSE = @{
     'BLockLegacyAuthentication'       = 'BlockLegacyAuth'
     'BlockAuthenticationFlows'        = 'BlockAuthFlows'
     'MFA'                             = 'MFA'
-    'ApplicationEnforcedRestrictions' = 'AppEnforcedRestrictions'
+    'AppEnforcedRestrictions' = 'AppEnforcedRestrictions'
+    'AppProtectionPolicy'            = 'AppProtectionPolicy'
 
 
     'compliantDevice'                 = 'Compliant'
-    'compliantApplication'            = 'RequireAppProtectionPolicy'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -413,25 +413,30 @@ function Resolve-CaResponse {
     $Controls = @()
     $AdditionalDetails = @()
 
-    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
-    if ($AuthenticationStrength) {
-        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
-    }
-
-    if ($Policy.conditions?.devices?.deviceFilter) {
-        $AdditionalDetails += 'DeviceFilter'
-    }
-
     # Resolve block controls
     if ($Policy.grantControls?.builtInControls -contains 'block') {
         $BlockControls = @()
+   
         
-        # Block specified locations
-        if ($Policy.conditions.locations?.includeLocations -and $Policy.conditions.locations.includeLocations -notcontains 'All') {
+#            $IncludeLocationsResolved = foreach ($LocId in $Locations.includeLocations) {
+#                $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
+#            }
+#        }
+#        $ExcludeLocationsResolved = foreach ($LocId in $Locations.excludeLocations) {
+#            $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
+#        }
+
+
+        # Location-based blocks
+        $IncludeLocations = $Policy.conditions.locations?.includeLocations
+        $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
+        if ($IncludeLocations -and $IncludeLocations -notcontains 'All') {
             $BlockControls += $CA_RESPONSE['BlockSpecifiedLocations']
+            $AdditionalDetails += $NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName
         }
-        elseif ($Policy.conditions.locations?.excludeLocations -and $Policy.conditions.locations.excludeLocations -notcontains 'All') {
+        elseif ($ExcludeLocations -and $ExcludeLocations -notcontains 'All') {
             $BlockControls += $CA_RESPONSE['AllowOnlySpecifiedLocations']
+            $AdditionalDetails += $NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName
         }
 
         # Block legacy authentication  
@@ -457,7 +462,25 @@ function Resolve-CaResponse {
         $Controls += $CA_RESPONSE['mfa']
     }
 
+    if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
+        $Controls += $CA_RESPONSE['AppProtectionPolicy']
+    }
+
     # Resolve session controls
+    if ($Policy.sessionControls?.applicationEnforcedRestrictions?.isEnabled) {
+        $Controls += $CA_RESPONSE['AppEnforcedRestrictions']
+    }
+
+
+    # Add additional details - TODO: Move to relevant sections above or abandon
+    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
+    if ($AuthenticationStrength) {
+        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
+    }
+
+    if ($Policy.conditions?.devices?.deviceFilter) {
+        $AdditionalDetails += 'DeviceFilter'
+    }
 
 
 
@@ -703,6 +726,9 @@ foreach ($MgPolicy in $MgPolicies) {
         if ($RecommendedPolicyName.Contains('<Response>')) {
             $Response = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response.Controls -join $CA_AND_DELIMITER
+            if ($AppendAdditionalDetails -and $Response.AdditionalDetails.count -gt 0) {
+                $RecommendedPolicyName += "-$($Response.AdditionalDetails -join '-')"
+            }
         }
 
 #        if ($RecommendedPolicyName.Contains('<Optional>')) {
