@@ -137,8 +137,10 @@ $CA_RESPONSE = @{
     'BLockLegacyAuthentication'       = 'BlockLegacyAuth'
     'BlockAuthenticationFlows'        = 'BlockAuthFlows'
     'MFA'                             = 'MFA'
+    'AuthenticationStrength'          = 'AuthStrength'
     'AppEnforcedRestrictions' = 'AppEnforcedRestrictions'
     'AppProtectionPolicy'            = 'AppProtectionPolicy'
+    'SignInFrequency'            = 'SignInFrequency'
 
 
     'compliantDevice'                 = 'Compliant'
@@ -416,16 +418,6 @@ function Resolve-CaResponse {
     # Resolve block controls
     if ($Policy.grantControls?.builtInControls -contains 'block') {
         $BlockControls = @()
-   
-        
-#            $IncludeLocationsResolved = foreach ($LocId in $Locations.includeLocations) {
-#                $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
-#            }
-#        }
-#        $ExcludeLocationsResolved = foreach ($LocId in $Locations.excludeLocations) {
-#            $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
-#        }
-
 
         # Location-based blocks
         $IncludeLocations = $Policy.conditions.locations?.includeLocations
@@ -451,7 +443,7 @@ function Resolve-CaResponse {
         }
         if ($BlockControls.count -eq 0) {
             $BlockControls += 'UNKNOWN BLOCK'
-            #$BlockControls += $CA_RESPONSE['Block'] 
+#            $BlockControls += $CA_RESPONSE['Block'] 
         }
 
         $Controls += $BlockControls
@@ -460,6 +452,12 @@ function Resolve-CaResponse {
     # Resolve requirement controls
     if ($Policy.grantControls?.builtInControls -contains 'mfa') {
         $Controls += $CA_RESPONSE['mfa']
+    }
+
+    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
+    if ($AuthenticationStrength) {
+        $Controls += $CA_RESPONSE['AuthenticationStrength']
+        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
     }
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
@@ -473,10 +471,10 @@ function Resolve-CaResponse {
 
 
     # Add additional details - TODO: Move to relevant sections above or abandon
-    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
-    if ($AuthenticationStrength) {
-        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
-    }
+  #  $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
+  #  if ($AuthenticationStrength) {
+  #      $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
+   # }
 
     if ($Policy.conditions?.devices?.deviceFilter) {
         $AdditionalDetails += 'DeviceFilter'
@@ -552,111 +550,9 @@ function Resolve-CaResponse {
         return $Controls -join $CA_AND_DELIMITER
     }
 
-    throw 'UNRESOLVED GRANT'
-    return 'UNRESOLVED GRANT'
+    throw 'UNRESOLVED RESPONSE'
+    return 'UNRESOLVED RESPONSE'
 }
-
-<#
-function Resolve-CaCondition {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [hashtable]
-        $Policy,
-
-        [Parameter(Mandatory)]
-        [PSCustomObject]
-        $NamedLocations
-    )
-
-    $Conditions = @()
-
-    # Device platforms
-    $Platforms = $Policy | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty platforms
-    if ($Platforms) {
-        if ($Platforms.includePlatforms -contains 'All') {
-            $Conditions += 'All device platforms'
-        }
-        else {
-            $Conditions += "Device platform $($Platforms.includePlatforms -join ' or ')"
-        }
-    }
-
-    # Locations
-    $Locations = $Policy | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty locations
-    if ($Locations) {
-        if ($Locations.includeLocations -contains 'All') {
-            $IncludeLocationsResolved = @('All locations')
-        }
-        else {
-            $IncludeLocationsResolved = foreach ($LocId in $Locations.includeLocations) {
-                $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
-            }
-        }
-        $ExcludeLocationsResolved = foreach ($LocId in $Locations.excludeLocations) {
-            $NamedLocations | Where-Object { $_.id -eq $LocId } | ForEach-Object { $_.displayName }
-        }
-
-        if ($ExcludeLocationsResolved) {
-            $Conditions += "Location is $($IncludeLocationsResolved -join ' or ') except $($ExcludeLocationsResolved -join ' or ')"
-        }
-        elseif ($IncludeLocationsResolved -notcontains 'All locations') {
-            $Conditions += "Location is $($IncludeLocationsResolved -join ' or ')"
-        }
-    }
-
-    # Client apps
-    $ClientApps = $Policy | Select-Object -ExpandProperty conditions | Select-Object -ExpandProperty clientAppTypes
-    if ($ClientApps) {
-        if ($ClientApps -contains 'All') {
-            $AllClientApps = $true
-        }
-        else {
-            $Conditions += "Client apps $($ClientApps -join ' or ')"
-            $AllClientApps = $false
-        }
-    }
-
-    if ($Conditions.count -gt 0) {
-        return $Conditions -join ' and '
-    }
-
-    if ($AllClientApps) {
-        return
-    }
-
-    return 'No conditions'
-}
-#>
-
-function Resolve-CaOptional {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [hashtable]
-        $Policy,
-
-        [Parameter(Mandatory)]
-        [PSCustomObject]
-        $NamedLocations
-    )
-
-    $OptionalComponents = @()
-
-    $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
-    if ($AuthenticationStrength) {
-        $OptionalComponents += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
-    }
-
-    if ($Policy.conditions?.devices?.deviceFilter) {
-        $OptionalComponents += 'DeviceFilter'
-    }
-
-
-    return $OptionalComponents
-    
-}
-
 
 #endregion
 
