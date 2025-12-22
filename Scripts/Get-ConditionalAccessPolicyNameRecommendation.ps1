@@ -130,20 +130,21 @@ $CA_PLATFORM = @{
 }
 
 $CA_RESPONSE = @{
-    'Block'                           = 'Block'
-    'BlockSpecifiedLocations'         = 'BlockSpecifiedLocations'
-    'AllowOnlySpecifiedLocations'     = 'AllowOnlySpecifiedLocations'
-    'BlockUnknownPlatforms'           = 'BlockUnknownPlatforms'
-    'BLockLegacyAuthentication'       = 'BlockLegacyAuth'
-    'BlockAuthenticationFlows'        = 'BlockAuthFlows'
-    'MFA'                             = 'MFA'
-    'AuthenticationStrength'          = 'AuthStrength'
-    'AppEnforcedRestrictions' = 'AppEnforcedRestrictions'
-    'AppProtectionPolicy'            = 'AppProtectionPolicy'
-    'SignInFrequency'            = 'SignInFrequency'
+    'Block'                       = 'Block'
+    'BlockSpecifiedLocations'     = 'BlockSpecifiedLocations'
+    'AllowOnlySpecifiedLocations' = 'AllowOnlySpecifiedLocations'
+    'BlockUnknownPlatforms'       = 'BlockUnknownPlatforms'
+    'BLockLegacyAuthentication'   = 'BlockLegacyAuth'
+    'BlockAuthenticationFlows'    = 'BlockAuthFlows'
+    'MFA'                         = 'MFA'
+    'AuthenticationStrength'      = 'AuthStrength'
+    'AppEnforcedRestrictions'     = 'AppEnforcedRestrictions'
+    'AppProtectionPolicy'         = 'AppProtectionPolicy'
+    'SignInFrequency'             = 'SignInFrequency'
+'NeverPersistBrowser' = 'NeverPersistBrowser'
+'AlwaysPersistBrowser' = 'AlwaysPersistBrowser'
 
-
-    'compliantDevice'                 = 'Compliant'
+    'compliantDevice'             = 'Compliant'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -443,7 +444,7 @@ function Resolve-CaResponse {
         }
         if ($BlockControls.count -eq 0) {
             $BlockControls += 'UNKNOWN BLOCK'
-#            $BlockControls += $CA_RESPONSE['Block'] 
+            #            $BlockControls += $CA_RESPONSE['Block'] 
         }
 
         $Controls += $BlockControls
@@ -457,7 +458,7 @@ function Resolve-CaResponse {
     $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
     if ($AuthenticationStrength) {
         $Controls += $CA_RESPONSE['AuthenticationStrength']
-        $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
+        $AdditionalDetails += $AuthenticationStrength.displayName
     }
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
@@ -469,23 +470,37 @@ function Resolve-CaResponse {
         $Controls += $CA_RESPONSE['AppEnforcedRestrictions']
     }
 
+    $SignInFrequency = $Policy.sessionControls?.signInFrequency
+    if ($SignInFrequency) {
+        $Controls += $CA_RESPONSE['SignInFrequency']
+        if ($SignInFrequency.frequencyInterval -eq 'timeBased') {
+            $AdditionalDetails += "$($SignInFrequency.value) $($SignInFrequency.type)"
+        }
+        else {
+            throw "unknown signin"
+        }
+    }
 
-    # Add additional details - TODO: Move to relevant sections above or abandon
-  #  $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
-  #  if ($AuthenticationStrength) {
-  #      $AdditionalDetails += Convert-ToPascalCase -InputString $AuthenticationStrength.displayName
-   # }
+    $PersistentBrowser = $Policy.sessionControls?.persistentBrowser
+    if ($PersistentBrowser) {
+        if ($PersistentBrowser.mode -eq 'never') {
+            $Controls += $CA_RESPONSE['NeverPersistBrowser']
+        }
+        else {
+            $Controls += $CA_RESPONSE['AlwaysPersistBrowser']             
+        }
+    }
 
+
+    # TODO
     if ($Policy.conditions?.devices?.deviceFilter) {
         $AdditionalDetails += 'DeviceFilter'
     }
 
-
-
     # Return responses
     if ($Controls.count -gt 0) {
         return [PSCustomObject]@{
-            Controls = $Controls
+            Controls          = $Controls
             AdditionalDetails = $AdditionalDetails
         }
     }
@@ -627,15 +642,15 @@ foreach ($MgPolicy in $MgPolicies) {
             }
         }
 
-#        if ($RecommendedPolicyName.Contains('<Optional>')) {
-#            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
-#            if ($OptionalComponents) {   
-#                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
-#            }
-#            else {
-#                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
-#            }
-#        }
+        #        if ($RecommendedPolicyName.Contains('<Optional>')) {
+        #            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
+        #            if ($OptionalComponents) {   
+        #                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
+        #            }
+        #            else {
+        #                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
+        #            }
+        #        }
 
         # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
 
