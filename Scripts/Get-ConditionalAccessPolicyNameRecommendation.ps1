@@ -6,14 +6,14 @@ param(
     # Templates string for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<PolicyType>-<TargetResource>-<Platform>-<Response>',
+    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<TargetResource>-<Platform>-<Response>',
 
     # Append additional details to the recommended name
     [Parameter()]
     [boolean]
     $AppendAdditionalDetails = $true
 )
-#requires -version 7.5.0
+#requires -version 7.4.0
 
 #region Configuration
 
@@ -130,21 +130,21 @@ $CA_PLATFORM = @{
 }
 
 $CA_RESPONSE = @{
-    'Block'                       = 'Block'
-    'BlockSpecifiedLocations'     = 'BlockSpecifiedLocations'
-    'AllowOnlySpecifiedLocations' = 'AllowOnlySpecifiedLocations'
-    'BlockUnknownPlatforms'       = 'BlockUnknownPlatforms'
-    'BLockLegacyAuthentication'   = 'BlockLegacyAuth'
-    'BlockAuthenticationFlows'    = 'BlockAuthFlows'
-    'MFA'                         = 'MFA'
-    'AuthenticationStrength'      = 'AuthStrength'
-    'AppEnforcedRestrictions'     = 'AppEnforcedRestrictions'
-    'AppProtectionPolicy'         = 'AppProtectionPolicy'
-    'SignInFrequency'             = 'SignInFrequency'
-'NeverPersistBrowser' = 'NeverPersistBrowser'
-'AlwaysPersistBrowser' = 'AlwaysPersistBrowser'
-
-    'compliantDevice'             = 'Compliant'
+    'Block'                             = 'Block'
+    'BlockSpecifiedLocations'           = 'BlockSpecifiedLocations'
+    'AllowOnlySpecifiedLocations'       = 'AllowOnlySpecifiedLocations'
+    'BlockUnknownPlatforms'             = 'BlockUnknownPlatforms'
+    'BLockLegacyAuthentication'         = 'BlockLegacyAuth'
+    'BlockAuthenticationFlows'          = 'BlockAuthFlows'
+    'MFA'                               = 'MFA'
+    'AuthenticationStrength'            = 'AuthStrength'
+    'AppEnforcedRestrictions'           = 'AppEnforcedRestrictions'
+    'AppProtectionPolicy'               = 'AppProtectionPolicy'
+    'SignInFrequency'                   = 'SignInFrequency'
+    'PersistentBrowserNever'               = 'NeverPersistBrowser'
+    'PersistentBrowserAlways'              = 'AlwaysPersistBrowser'
+    'ContinuousAccessEvaluationStrictLocation'  = 'StrictLocationCAE'
+    'ContinuousAccessEvaluationDisabled' = 'DisableCAE'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -443,7 +443,7 @@ function Resolve-CaResponse {
             $BlockControls += $CA_RESPONSE['BlockAuthenticationFlows']
         }
         if ($BlockControls.count -eq 0) {
-            $BlockControls += 'UNKNOWN BLOCK'
+            throw 'UNKNOWN BLOCK'
             #            $BlockControls += $CA_RESPONSE['Block'] 
         }
 
@@ -476,23 +476,32 @@ function Resolve-CaResponse {
         if ($SignInFrequency.frequencyInterval -eq 'timeBased') {
             $AdditionalDetails += "$($SignInFrequency.value) $($SignInFrequency.type)"
         }
-        else {
-            throw "unknown signin"
+        elseif ($SignInFrequency.frequencyInterval -eq 'everyTime') {
+            $AdditionalDetails += 'Every time'
         }
     }
 
     $PersistentBrowser = $Policy.sessionControls?.persistentBrowser
     if ($PersistentBrowser) {
         if ($PersistentBrowser.mode -eq 'never') {
-            $Controls += $CA_RESPONSE['NeverPersistBrowser']
+            $Controls += $CA_RESPONSE['PersistentBrowserNever']
         }
         else {
-            $Controls += $CA_RESPONSE['AlwaysPersistBrowser']             
+            $Controls += $CA_RESPONSE['PersistentBrowserAlways']             
         }
     }
 
+    $ContinuousAccessEvaluation = $Policy.sessionControls?.continuousAccessEvaluation
+    if ($ContinuousAccessEvaluation) {
+        if ($ContinuousAccessEvaluation.mode -eq 'strictLocation') {
+            $Controls += $CA_RESPONSE['ContinuousAccessEvaluationStrictLocation']
+        }
+        else {
+            $Controls += $CA_RESPONSE['ContinuousAccessEvaluationDisabled']             
+        }
+    }
 
-    # TODO
+    # Add additional details that is not tied to a specific type of control
     if ($Policy.conditions?.devices?.deviceFilter) {
         $AdditionalDetails += 'DeviceFilter'
     }
@@ -587,7 +596,7 @@ if ($MsManagedCount -gt 0) {
     $MgPolicies = $MgPolicies | Where-Object { -not $_.templateId }
 }
 
-# Determine if a CA999 / CA9999 serial number standard is in use
+# Determine if a serial number standard is in use
 $PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX
 if ($PoliciesWithCaSn) {
     if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
@@ -620,10 +629,6 @@ foreach ($MgPolicy in $MgPolicies) {
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<SerialNumber>', $SerialNumber 
         }
     
-        if ($RecommendedPolicyName.Contains('<PolicyType>')) {
-            # TODO: Resolve policy type
-        }
-
         if ($RecommendedPolicyName.Contains('<TargetResource>')) {
             $TargetResource = Resolve-CaTargetResource -Policy $MgPolicy
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<TargetResource>', $TargetResource
@@ -641,35 +646,8 @@ foreach ($MgPolicy in $MgPolicies) {
                 $RecommendedPolicyName += "-$($Response.AdditionalDetails -join '-')"
             }
         }
-
-        #        if ($RecommendedPolicyName.Contains('<Optional>')) {
-        #            $OptionalComponents = Resolve-CaOptional -Policy $MgPolicy -NamedLocations $MgLocations
-        #            if ($OptionalComponents) {   
-        #                $RecommendedPolicyName = $RecommendedPolicyName -replace '<Optional>', ($OptionalComponents -join '-')
-        #            }
-        #            else {
-        #                $RecommendedPolicyName = $RecommendedPolicyName -replace '[- ]*<Optional>', ''
-        #            }
-        #        }
-
-        # TODO: Change this to only resolve components used in the template - makes it possible to support different naming standards
-
-        # Resolve policy components
-        # TODO: Some policies might have multiple responses, applications, principals, conditions - need to handle those better
-        #$CloudApp = Resolve-CaApplication -Policy $MgPolicy
-        #$Response = Resolve-CaResponse -Policy $MgPolicy
-        #$Principal = Resolve-CaPrincipal -Policy $MgPolicy
-        #$Conditions = Resolve-CaCondition -Policy $MgPolicy -NamedLocations $MgLocations
-
-        # Construct recommended policy name
-        <#        $RecommendedPolicyName = $PolicyNameTemplate -replace '<SerialNumber>', $SerialNumber -replace '<CloudApp>', $CloudApp -replace '<Response>', $Response -replace '<Principal>', $Principal 
-        if ($Conditions) {
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Conditions>', $Conditions
-        }
-        else {
-            $RecommendedPolicyName = $RecommendedPolicyName -replace ' When <Conditions>', ''
-        } #>
         
+
         # TODO: Maximum length check (128 characters)
 
         # Output resultning object
