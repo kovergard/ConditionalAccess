@@ -105,7 +105,8 @@ $CA_APP = @{
     '00000002-0000-0ff1-ce00-000000000000' = 'EXO' 
     '00000003-0000-0ff1-ce00-000000000000' = 'SPO' 
     '00000003-0000-0000-c000-000000000000' = 'MicrosoftGraph' 
-    '00000009-0000-0000-c000-000000000000' = 'PowerBI'        
+    '00000009-0000-0000-c000-000000000000' = 'PowerBI'   
+    '0000000a-0000-0000-c000-000000000000' = 'Intune'
     '1fec8e78-bce4-4aaf-ab1b-5451cc387264' = 'Teams'               
     'd4ebce55-015a-49b5-a083-c84d1797ae8c' = 'IntuneEnrollment'            
     '797f4846-ba00-4fd7-ba43-dac1f8f63013' = 'AzureResourceManager' 
@@ -113,6 +114,8 @@ $CA_APP = @{
     '04b07795-8ddb-461a-bbee-02f9e1bf7b46' = 'AzureCLI' 
     '1950a258-227b-4e31-a9cf-717495945fc2' = 'AzurePowerShell'
     'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' = 'AzurePortal'
+    '14d82eec-204b-4c2f-b7e8-296a70dab67e' = 'GraphCLI'
+    '2793995e-0a7d-40d7-bd35-6968ba142197' = 'MyApps'
 }
 
 $CA_USERACTION = @{
@@ -130,21 +133,23 @@ $CA_PLATFORM = @{
 }
 
 $CA_RESPONSE = @{
-    'Block'                             = 'Block'
-    'BlockSpecifiedLocations'           = 'BlockSpecifiedLocations'
-    'AllowOnlySpecifiedLocations'       = 'AllowOnlySpecifiedLocations'
-    'BlockUnknownPlatforms'             = 'BlockUnknownPlatforms'
-    'BLockLegacyAuthentication'         = 'BlockLegacyAuth'
-    'BlockAuthenticationFlows'          = 'BlockAuthFlows'
-    'MFA'                               = 'MFA'
-    'AuthenticationStrength'            = 'AuthStrength'
-    'AppEnforcedRestrictions'           = 'AppEnforcedRestrictions'
-    'AppProtectionPolicy'               = 'AppProtectionPolicy'
-    'SignInFrequency'                   = 'SignInFrequency'
-    'PersistentBrowserNever'               = 'NeverPersistBrowser'
-    'PersistentBrowserAlways'              = 'AlwaysPersistBrowser'
-    'ContinuousAccessEvaluationStrictLocation'  = 'StrictLocationCAE'
-    'ContinuousAccessEvaluationDisabled' = 'DisableCAE'
+    'Block'                                    = 'Block'
+    'BlockSpecifiedLocations'                  = 'BlockSpecifiedLocations'
+    'AllowOnlySpecifiedLocations'              = 'AllowOnlySpecifiedLocations'
+    'BlockPlatforms'                           = 'BlockSpecifiedPlatforms'
+    'BlockApplications'                        = 'BlockSpecifiedApps'
+    'BLockLegacyAuthentication'                = 'BlockLegacyAuth'
+    'BlockAuthenticationFlows'                 = 'BlockAuthFlows'
+    'MFA'                                      = 'MFA'
+    'AuthenticationStrength'                   = 'AuthStrength'
+    'ComplientDevice'                          = 'CompliantDevice'
+    'AppEnforcedRestrictions'                  = 'AppEnforcedRestrictions'
+    'AppProtectionPolicy'                      = 'AppProtectionPolicy'
+    'SignInFrequency'                          = 'SignInFrequency'
+    'PersistentBrowserNever'                   = 'NeverPersistBrowser'
+    'PersistentBrowserAlways'                  = 'AlwaysPersistBrowser'
+    'ContinuousAccessEvaluationStrictLocation' = 'StrictLocationCAE'
+    'ContinuousAccessEvaluationDisabled'       = 'DisableCAE'
 }
 
 $CA_AND_DELIMITER = '&'
@@ -349,6 +354,21 @@ function Resolve-CaTargetResource {
             'UnknownApp'
         }
     }
+    $ExcludeApps = $Policy.conditions.applications.excludeApplications | ForEach-Object {
+        if ($CA_APP[$_]) {
+            $CA_APP[$_]
+        }
+        else {
+            Write-Warning "Unrecognized Exclude AppId '$_' in policy '$($Policy.displayName)'"
+            'UnknownApp'
+        }
+    }
+
+    # Check for excludes if All apps are included
+    if ($Apps -contains $CA_APP['All'] -and $ExcludeApps) {
+        return "$($Apps)Except$($ExcludeApps -join $CA_AND_DELIMITER)"
+    }
+
     if ($Apps) {
         return $Apps -join $CA_AND_DELIMITER
     }
@@ -383,6 +403,19 @@ function Resolve-CaPlatform {
     
     # If no platforms are specified, all platforms are included
     if ($null -eq $IncludePlatforms -or $IncludePlatforms -contains 'all') {
+        $ExcludePlatforms = $Policy.conditions.platforms?.excludePlatforms
+        if ($null -ne $ExcludePlatforms -and $ExcludePlatforms.count -gt 0) {
+            $ExcludePlatformsNames = $ExcludePlatforms | ForEach-Object {
+                if ($CA_PLATFORM[$_]) {
+                    $CA_PLATFORM[$_]
+                }
+                else {
+                    Write-Warning "Unrecognized platform '$_' in policy '$($Policy.displayName)'"
+                    'UnknownPlatform'
+                }
+            }
+            return "$($CA_PLATFORM['all'])Except$($ExcludePlatformsNames -join $CA_AND_DELIMITER)"            
+        }
         return $CA_PLATFORM['all']
     }
 
@@ -442,6 +475,21 @@ function Resolve-CaResponse {
         if ($null -ne $TransferMethods -and $TransferMethods.IndexOf('deviceCodeFlow') -ge 0 -and $TransferMethods.Indexof('authenticationTransfer') -ge 0 ) {
             $BlockControls += $CA_RESPONSE['BlockAuthenticationFlows']
         }
+
+        # BLock platforms
+        $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
+        if ($IncludePlatforms) {
+            $BlockControls += $CA_RESPONSE['BlockPlatforms']
+        }
+
+        # Block applications
+        $IncludeApps = $Policy.conditions.applications?.includeApplications
+        $ExcludeApps = $Policy.conditions.applications?.excludeApplications
+        if ($IncludeApps -notcontains 'All' -or ($IncludeApps -contains 'All' -and $ExcludeApps)) {
+            $BlockControls += $CA_RESPONSE['BlockApplications']
+        }
+
+        # Handle unknown block case
         if ($BlockControls.count -eq 0) {
             throw 'UNKNOWN BLOCK'
             #            $BlockControls += $CA_RESPONSE['Block'] 
@@ -459,6 +507,10 @@ function Resolve-CaResponse {
     if ($AuthenticationStrength) {
         $Controls += $CA_RESPONSE['AuthenticationStrength']
         $AdditionalDetails += $AuthenticationStrength.displayName
+    }
+
+    if ($Policy.grantControls?.builtInControls -contains 'compliantDevice') {
+        $Controls += $CA_RESPONSE['ComplientDevice']
     }
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
@@ -501,7 +553,7 @@ function Resolve-CaResponse {
         }
     }
 
-    # Add additional details that is not tied to a specific type of control
+    # Add additional details that is not necessarily tied to a specific type of control
     if ($Policy.conditions?.devices?.deviceFilter) {
         $AdditionalDetails += 'DeviceFilter'
     }
@@ -514,68 +566,7 @@ function Resolve-CaResponse {
         }
     }
 
-    throw 'Find a way to resolve!'
-
-
-    # Resolve grant controls
-    $GrantControls = $Policy | Select-Object -ExpandProperty grantControls
-    $BuiltInControls = $GrantControls | Select-Object -ExpandProperty builtInControls
-    if ($BuiltInControls) {
-        if ($BuiltInControls -contains 'block') {
-            $Controls += 'Block'
-        }
-        if ($BuiltInControls -contains 'mfa') {
-            $Controls += 'MFA'
-        }
-        if ($BuiltInControls -contains 'compliantApplication') {
-            $Controls += 'Require app protection policy'
-        }
-        if ($BuiltInControls -contains 'compliantDevice') {
-            $Controls += 'Compliant'
-        }
-    }
-    $AuthenticationStrength = $GrantControls | Select-Object -ExpandProperty authenticationStrength
-    if ($AuthenticationStrength) {
-        $Controls += 'AuthStrength'
-    }
-
-    # Resolve session controls
-    $SessionControls = $Policy | Select-Object -ExpandProperty sessionControls
-    $ApplicationEnforcedRestrictions = $SessionControls | Select-Object -ExpandProperty applicationEnforcedRestrictions
-    if ($ApplicationEnforcedRestrictions) {
-        if ($ApplicationEnforcedRestrictions.isEnabled) {
-            $Controls += 'Use app enforced restrictions'
-        }
-    }
-    $SignInFrequency = $SessionControls | Select-Object -ExpandProperty signInFrequency
-    if ($SignInFrequency) {
-        if ($SignInFrequency.isEnabled) {
-            if ($SignInFrequency.frequencyInterval -eq 'timeBased') {
-                $Controls += "SigninFreq$($SignInFrequency.value)$($SignInFrequency.type[0])"
-            }
-            else {
-                $Controls += 'SigninEveryTime'
-            }
-        }
-    }
-    $PersistentBrowser = $SessionControls | Select-Object -ExpandProperty persistentBrowser
-    if ($PersistentBrowser) {
-        if ($PersistentBrowser.isEnabled) {
-            $Controls += "Persistent browser '$($PersistentBrowser.mode)'" 
-        }
-    }
-    $ContinuousAccessEvaluation = $SessionControls | Select-Object -ExpandProperty continuousAccessEvaluation
-    if ($ContinuousAccessEvaluation) {
-        $Controls += "Conditional access evaluation '$($ContinuousAccessEvaluation.mode)'" 
-    }
-
-
-    if ($Controls.count -gt 0) {
-        return $Controls -join $CA_AND_DELIMITER
-    }
-
     throw 'UNRESOLVED RESPONSE'
-    return 'UNRESOLVED RESPONSE'
 }
 
 #endregion
