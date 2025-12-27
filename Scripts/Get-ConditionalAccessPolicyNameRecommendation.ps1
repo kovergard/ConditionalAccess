@@ -6,7 +6,7 @@ param(
     # Templates string for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber>-<Persona>-<TargetResource>-<Platform>-<Response>',
+    $PolicyNameTemplate = '<SerialNumber> - <Persona> - <TargetResource> - <Platform> - <Response>',
 
     # Append additional details to the recommended name
     [Parameter()]
@@ -99,62 +99,75 @@ $CA_PERSONA = @(
 )
 
 $CA_APP = @{
-    'All'                                  = 'AllApps' 
-    'Office365'                            = 'Office365' 
-    'MicrosoftAdminPortals'                = 'AdminPortals' 
+    'All'                                  = 'All apps' 
+    'Office365'                            = 'Office 365' 
+    'MicrosoftAdminPortals'                = 'Admin portals' 
     '00000002-0000-0ff1-ce00-000000000000' = 'EXO' 
     '00000003-0000-0ff1-ce00-000000000000' = 'SPO' 
-    '00000003-0000-0000-c000-000000000000' = 'MicrosoftGraph' 
+    '00000003-0000-0000-c000-000000000000' = 'Microsoft Graph' 
     '00000009-0000-0000-c000-000000000000' = 'PowerBI'   
     '0000000a-0000-0000-c000-000000000000' = 'Intune'
     '1fec8e78-bce4-4aaf-ab1b-5451cc387264' = 'Teams'               
-    'd4ebce55-015a-49b5-a083-c84d1797ae8c' = 'IntuneEnrollment'            
-    '797f4846-ba00-4fd7-ba43-dac1f8f63013' = 'AzureResourceManager' 
-    '499b84ac-1321-427f-aa17-267ca6975798' = 'AzureDevOps'
-    '04b07795-8ddb-461a-bbee-02f9e1bf7b46' = 'AzureCLI' 
-    '1950a258-227b-4e31-a9cf-717495945fc2' = 'AzurePowerShell'
-    'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' = 'AzurePortal'
-    '14d82eec-204b-4c2f-b7e8-296a70dab67e' = 'GraphCLI'
+    'd4ebce55-015a-49b5-a083-c84d1797ae8c' = 'Intune enrollment'            
+    '797f4846-ba00-4fd7-ba43-dac1f8f63013' = 'Azure Resource Manager' 
+    '499b84ac-1321-427f-aa17-267ca6975798' = 'Azure DevOps'
+    '04b07795-8ddb-461a-bbee-02f9e1bf7b46' = 'Azure CLI' 
+    '1950a258-227b-4e31-a9cf-717495945fc2' = 'Azure PowerShell'
+    'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' = 'Azure portal'
+    '14d82eec-204b-4c2f-b7e8-296a70dab67e' = 'Graph CLI'
     '2793995e-0a7d-40d7-bd35-6968ba142197' = 'MyApps'
 }
 
 $CA_USERACTION = @{
-    'urn:user:registerdevice'       = 'RegisterOrJoin'
-    'urn:user:registersecurityinfo' = 'SecurityInfo' 
+    'urn:user:registerdevice'       = 'Register or join device'
+    'urn:user:registersecurityinfo' = 'Register security info' 
 }
 
 $CA_PLATFORM = @{
-    'all'          = 'AnyPlatform'
+    'all'          = 'Any platform'
     'android'      = 'Android'
     'iOS'          = 'iOS'
     'linux'        = 'Linux'
-    'macOS'        = 'MacOS'
-    'windowsPhone' = 'WindowsPhone'
+    'macOS'        = 'macOS'
+    'windowsPhone' = 'Windows Phone'
     'windows'      = 'Windows'
 }
 
 $CA_RESPONSE = @{
+
+    # Grant controls - block types
     'Block'                                    = 'Block'
-    'BlockSpecifiedLocations'                  = 'BlockSpecifiedLocations'
-    'AllowOnlySpecifiedLocations'              = 'AllowOnlySpecifiedLocations'
-    'BlockPlatforms'                           = 'BlockSpecifiedPlatforms'
-    'BlockApplications'                        = 'BlockSpecifiedApps'
-    'BLockLegacyAuthentication'                = 'BlockLegacyAuth'
-    'BlockAuthenticationFlows'                 = 'BlockAuthFlows'
-    'MFA'                                      = 'MFA'
-    'AuthenticationStrength'                   = 'AuthStrength'
-    'ComplientDevice'                          = 'CompliantDevice'
-    'AppEnforcedRestrictions'                  = 'AppEnforcedRestrictions'
-    'AppProtectionPolicy'                      = 'AppProtectionPolicy'
-    'SignInFrequency'                          = 'SignInFrequency'
-    'PersistentBrowserNever'                   = 'NeverPersistBrowser'
-    'PersistentBrowserAlways'                  = 'AlwaysPersistBrowser'
-    'ContinuousAccessEvaluationStrictLocation' = 'StrictLocationCAE'
-    'ContinuousAccessEvaluationDisabled'       = 'DisableCAE'
+    'BlockLocations'                           = 'Block locations: <Locations>'
+    'OnlyAllowLocations'                       = 'Only allow locations: <Locations>'
+    'BlockPlatforms'                           = 'Block specified platforms'
+    'BlockApplications'                        = 'Block specified apps'
+    'BLockLegacyAuthentication'                = 'Block legacy authentication'
+    'BlockAuthenticationFlows'                 = 'Block authentication flows'
+
+    # Grant controls - grant types
+    'MFA'                                      = 'Require MFA'
+    'AuthenticationStrength'                   = 'Require authentication strength: <AuthStrength>'
+    'ComplientDevice'                          = 'Require compliant device'
+        #TODO: Hybrid joined
+        #TODO: Approved clients apps
+    'AppProtectionPolicy'                      = 'Require app protection policy'
+        #TODO: Risk remidiation
+
+    # Session controls
+    'AppEnforcedRestrictions'                  = 'Use app enforced restrictions'
+        #TODO: CA App Control
+    'SignInFrequency'                          = 'Sign-in frequency: <SignInFrequency>'
+    'PersistentBrowserNever'                   = 'Never persist browser'
+    'PersistentBrowserAlways'                  = 'Always persist browser'
+    'ContinuousAccessEvaluationStrictLocation' = 'Strict location CAE'
+    'ContinuousAccessEvaluationDisabled'       = 'Disable CAE'
+        #TODO: Disable resilience defaults
+        #TODO: Token protection
+        #TODO: Use GSA security profile
 }
 
-$CA_AND_DELIMITER = '&'
-$CA_OR_DELIMITER = '/'
+$CA_AND_DELIMITER = ' and '
+$CA_OR_DELIMITER = ' or '
 
 #endregion
 
@@ -170,7 +183,7 @@ $SerialNumbersInUse = @()           # Track used serial numbers
 
 #region Internal functions
 
-function Convert-ToPascalCase {
+function Convert-ToPascalCaseString {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
@@ -367,7 +380,7 @@ function Resolve-CaTargetResource {
 
     # Check for excludes if All apps are included
     if ($Apps -contains $CA_APP['All'] -and $ExcludeApps) {
-        return "$($Apps)Except$($ExcludeApps -join $CA_AND_DELIMITER)"
+        return "$($Apps) except $($ExcludeApps -join $CA_AND_DELIMITER)"
     }
 
     if ($Apps) {
@@ -415,7 +428,7 @@ function Resolve-CaPlatform {
                     'UnknownPlatform'
                 }
             }
-            return "$($CA_PLATFORM['all'])Except$($ExcludePlatformsNames -join $CA_AND_DELIMITER)"            
+            return "$($CA_PLATFORM['all']) except $($ExcludePlatformsNames -join $CA_AND_DELIMITER)"            
         }
         return $CA_PLATFORM['all']
     }
@@ -458,12 +471,12 @@ function Resolve-CaResponse {
         $IncludeLocations = $Policy.conditions.locations?.includeLocations
         $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
         if ($IncludeLocations -and $IncludeLocations -notcontains 'All') {
-            $BlockControls += $CA_RESPONSE['BlockSpecifiedLocations']
-            $AdditionalDetails += $NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName
+            $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $CA_AND_DELIMITER
+            $BlockControls += $CA_RESPONSE['BlockLocations'].Replace('<Locations>', $Locations)
         }
         elseif ($ExcludeLocations -and $ExcludeLocations -notcontains 'All') {
-            $BlockControls += $CA_RESPONSE['AllowOnlySpecifiedLocations']
-            $AdditionalDetails += $NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName
+            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $CA_AND_DELIMITER
+            $BlockControls += $CA_RESPONSE['OnlyAllowLocations'].Replace('<Locations>', $Locations)
         }
 
         # Block legacy authentication  
@@ -644,7 +657,7 @@ foreach ($MgPolicy in $MgPolicies) {
             $Response = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
             $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response.Controls -join $CA_AND_DELIMITER
             if ($AppendAdditionalDetails -and $Response.AdditionalDetails.count -gt 0) {
-                $RecommendedPolicyName += "-$($Response.AdditionalDetails -join '-')"
+                $RecommendedPolicyName += " - ADDITIONAL: $($Response.AdditionalDetails -join '-')"
             }
         }
         
@@ -656,7 +669,7 @@ foreach ($MgPolicy in $MgPolicies) {
             #Id                    = $MgPolicy.id
             CurrentPolicyName     = $MgPolicy.displayName
             RecommendedPolicyName = $RecommendedPolicyName
-            #NameLength            = $RecommendedPolicyName.Length
+            NameLength            = $RecommendedPolicyName.Length
             #ComplianceStatus      = 'TODO'
         }   
     }
