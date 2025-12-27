@@ -127,6 +127,7 @@ $CA_PLATFORM = @{
     'all'          = 'AnyPlatform'
     'android'      = 'Android'
     'iOS'          = 'iOS'
+    'linux'        = 'Linux'
     'macOS'        = 'MacOS'
     'windowsPhone' = 'WindowsPhone'
     'windows'      = 'Windows'
@@ -577,15 +578,24 @@ function Resolve-CaResponse {
 $MgContext = Confirm-GraphConnection -RequiredScopes $GRAPH_SCOPES
 
 # Fetch Conditional Access policies
-$MgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
+$UnfilteredMgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
+$MgPolicyTemplates = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/templates" -Verbose:$false | Select-Object -ExpandProperty value
 $MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
 
-# Remove Microsoft-managed policies
-$MsManagedCount = ($MgPolicies | Where-Object { $_.templateId }).count
-if ($MsManagedCount -gt 0) {
-    Write-Verbose "Skipping $MsManagedCount Microsoft-managed policies"
-    $MgPolicies = $MgPolicies | Where-Object { -not $_.templateId }
+# Filter Microsoft-managed policies
+$MgPolicies = $UnfilteredMgPolicies | ForEach-Object {
+    if ($_.templateId -and $_.templateId -notin $MgPolicyTemplates.id) {
+        Write-Verbose "Skipping Microsoft-managed policy: $($_.displayName)"
+    }
+    else {
+        $_
+    }
 }
+#$MsManagedCount = ($MgPolicies | Where-Object { $_.templateId }).count
+#if ($MsManagedCount -gt 0) {
+#    Write-Verbose "Skipping $MsManagedCount Microsoft-managed policies"
+#    $MgPolicies = $MgPolicies | Where-Object { -not $_.templateId }
+#}
 
 # Determine if a serial number standard is in use
 $PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX
