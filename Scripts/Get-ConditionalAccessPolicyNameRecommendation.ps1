@@ -3,15 +3,27 @@
 #>
 [CmdletBinding()]
 param(
-    # Templates string for the suggested policy names
+    # Pattern for the suggested policy names
     [Parameter()]
     [string]
-    $PolicyNameTemplate = '<SerialNumber> - <Persona> - <TargetResource> - <Platform> - <Response>',
+    $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}',
 
-    # Append additional details to the recommended name
+    # Delimiter used when all parts must be satisfied (logical AND)
     [Parameter()]
-    [boolean]
-    $AppendAdditionalDetails = $true
+    [string] 
+    $SerialNumberPrefix = 'CA',
+ 
+    # Delimiter used when all parts must be satisfied (logical AND)
+    [Parameter()]
+    [Alias('AndSeparator', 'RequireAllDelimiter')]
+    [string]
+    $AllPartsDelimiter = ' and ',
+
+    # Delimiter used when any part may satisfy (logical OR)
+    [Parameter()]
+    [Alias('OrSeparator', 'MatchAnyDelimiter')]
+    [string]
+    $AnyPartsDelimiter = ' or '
 )
 #requires -version 7.4.0
 
@@ -28,72 +40,72 @@ $GRAPH_SCOPES = @(
 )
 
 # Serial number regex for detection
-$CA_SERIAL_NUMBER_REGEX = '^CA\d{3,4}'
+$CA_SERIAL_NUMBER_REGEX = "^$($SerialNumberPrefix)\d{2,4}"
 
 # Persona definitions
 $CA_PERSONA = @(
     @{
         Name           = 'Global'
         EntraGroupName = 'CA-Persona-Global'
-        SerialPrefix   = 'CA0'
+        SerialDigits   = '0'
         MatchAll       = $true
     }
     @{
         Name           = 'Admins'
         EntraGroupName = 'CA-Persona-Admins'
-        SerialPrefix   = 'CA1'
+        SerialDigits   = '1'
         MatchRoles     = $true
     }
     @{
         Name           = 'Internals' 
         EntraGroupName = 'CA-Persona-Internals'
-        SerialPrefix   = 'CA2'
+        SerialDigits   = '2'
     }
     @{
         Name           = 'Externals' 
         EntraGroupName = 'CA-Persona-Externals'
-        SerialPrefix   = 'CA3'
+        SerialDigits   = '3'
     }
     @{
         Name           = 'Guests'
         EntraGroupName = 'CA-Persona-Guests'
-        SerialPrefix   = 'CA4'
+        SerialDigits   = '4'
         MatchGuests    = $true
     }
     @{
         Name           = 'GuestAdmins'
         EntraGroupName = 'CA-Persona-GuestAdmins'
-        SerialPrefix   = 'CA5'
+        SerialDigits   = '5'
     }
     @{
         Name           = 'Microsoft365ServiceAccounts'
         EntraGroupName = 'CA-Persona-Microsoft365ServiceAccounts'
-        SerialPrefix   = 'CA6'
+        SerialDigits   = '6'
     }
     @{
         Name           = 'AzureServiceAccounts'
         EntraGroupName = 'CA-Persona-AzureServiceAccounts'
-        SerialPrefix   = 'CA7'
+        SerialDigits   = '7'
     }
     @{
         Name           = 'CorpServiceAccounts'
         EntraGroupName = 'CA-Persona-CorpServiceAccounts'
-        SerialPrefix   = 'CA8'
+        SerialDigits   = '8'
     }
     @{
         Name           = 'WorkloadIdentities'
         EntraGroupName = 'CA-Persona-WorkloadIdentities'
-        SerialPrefix   = 'CA9'
+        SerialDigits   = '9'
     }
     @{
         Name           = 'Developers'
         EntraGroupName = 'CA-Persona-Developers'
-        SerialPrefix   = 'CA10'
+        SerialDigits   = '10'
     }
     @{
         Name           = 'Unknown'
         EntraGroupName = 'CA-Persona-Unknown'
-        SerialPrefix   = 'CAx'
+        SerialDigits   = 'CAx'
         MatchUnknown   = $true
     }
 )
@@ -133,7 +145,7 @@ $CA_PLATFORM = @{
     'macOS'        = 'macOS'
     'windowsPhone' = 'Windows Phone'
     'windows'      = 'Windows'
-    'AllUnknown'   = 'Any unknown platform'
+    'Unknown'      = 'Unknown platforms'
     'Unresolved'   = 'Unresolved platform'
 }
 
@@ -141,28 +153,34 @@ $CA_RESPONSE = @{
 
     # Grant controls - block types
     'Block'                                    = 'Block'
-    'BlockLocations'                           = 'Block locations: <Locations>'
-    'OnlyAllowLocations'                       = 'Only allow locations: <Locations>'
+    'BlockLocations'                           = "Block locations '{Locations}'"
+    'OnlyAllowLocations'                       = "Only allow locations '{Locations}'"
     'BLockLegacyAuthentication'                = 'Block legacy authentication'
     'BlockAuthenticationFlows'                 = 'Block authentication flows'
 
     # Grant controls - grant types
-    'MFA'                                      = 'Require MFA'
-    'AuthenticationStrength'                   = 'Require authentication strength: <AuthStrength>'
-    'ComplientDevice'                          = 'Require compliant device'
-    #TODO: Hybrid joined
-    #TODO: Approved clients apps
-    'AppProtectionPolicy'                      = 'Require app protection policy'
-    #TODO: Risk remidiation
+    'MFA'                                      = 'MFA'
+    'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
+    'ComplientDevice'                          = 'compliant device'
+    'DomainJoinedDevice'                       = 'hybrid-joined device'
+    #Approved clients apps is retiring
+    'AppProtectionPolicy'                      = 'app protection policy'
+    #TODO: Risk remidiation - requires P2
+
+    # INSIDER?
+    # RISKY SIGN-INS?
 
     # Session controls
     'AppEnforcedRestrictions'                  = 'Use app enforced restrictions'
-    #TODO: CA App Control
-    'SignInFrequency'                          = 'Sign-in frequency: <SignInFrequency>'
+    'CloudAppSecurityMonitorOnly'              = "Use CA App Control 'Monitor only'"
+    'CloudAppSecurityBlockDownloads'           = "Use CA App Control 'Block downloads'"
+    'CloudAppSecurityCustomPolicy'             = "Use CA App Control 'Custom policy'"
+    'SignInFrequency'                          = "Sign-in frequency '{SignInFrequency}'"
     'PersistentBrowserNever'                   = 'Never persist browser'
     'PersistentBrowserAlways'                  = 'Always persist browser'
     'ContinuousAccessEvaluationStrictLocation' = 'Strict location CAE'
     'ContinuousAccessEvaluationDisabled'       = 'Disable CAE'
+    'DisableResilienceDefaults'                = 'Disable resilience defaults'
     #TODO: Disable resilience defaults
     #TODO: Token protection
     #TODO: Use GSA security profile
@@ -170,9 +188,6 @@ $CA_RESPONSE = @{
     # Unresolved
     'Unresolved'                               = 'Unresolved response'
 }
-
-$CA_AND_DELIMITER = ' and '
-$CA_OR_DELIMITER = ' or '
 
 #endregion
 
@@ -186,7 +201,7 @@ $SerialNumbersInUse = @()           # Track used serial numbers
 
 #endregion
 
-#region Internal functions
+#region Helper functions
 
 function Convert-ToPascalCaseString {
     [CmdletBinding()]
@@ -385,11 +400,11 @@ function Resolve-CaTargetResource {
 
     # Check for excludes if All apps are included
     if ($Apps -contains $CA_APP['All'] -and $ExcludeApps) {
-        return "$($Apps) except $($ExcludeApps -join $CA_AND_DELIMITER)"
+        return "$($Apps) except $($ExcludeApps -join $AllPartsDelimiter)"
     }
 
     if ($Apps) {
-        return $Apps -join $CA_AND_DELIMITER
+        return $Apps -join $AllPartsDelimiter
     }
 
     # Resolve user actions
@@ -403,7 +418,7 @@ function Resolve-CaTargetResource {
         }
     }
     if ($Actions) {
-        return $Actions -join $CA_AND_DELIMITER
+        return $Actions -join $AllPartsDelimiter
     }
 
     Write-Warning "Could not resolve application or action from $($Policy.conditions.applications | ConvertTo-Json -Compress) in policy '$($Policy.displayName)'"
@@ -421,7 +436,10 @@ function Resolve-CaPlatform {
     $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
     
     if ($Policy.conditions?.devices?.deviceFilter) {
-        Write-Warning "Device filter present in policy '$($Policy.displayName)'. Platform resolution may be inaccurate."
+        $DeviceFilterString = " with device filter"
+    }
+    else {
+        $DeviceFilterString = ""
     }
 
     # If no platforms are specified, all platforms are included
@@ -429,7 +447,7 @@ function Resolve-CaPlatform {
         $ExcludePlatforms = $Policy.conditions.platforms?.excludePlatforms
         if ($null -ne $ExcludePlatforms -and $ExcludePlatforms.count -gt 0) {
             if ($ExcludePlatforms.count -eq 6) {
-                return $CA_PLATFORM['AllUnknown']
+                return "$($CA_PLATFORM['Unknown'])$DeviceFilterString"
             }
             $ExcludePlatformsNames = $ExcludePlatforms | ForEach-Object {
                 if ($CA_PLATFORM[$_]) {
@@ -440,9 +458,9 @@ function Resolve-CaPlatform {
                     $CA_PLATFORM['Unresolved']
                 }
             }
-            return "$($CA_PLATFORM['all']) except $($ExcludePlatformsNames -join $CA_AND_DELIMITER)"            
+            return "$($CA_PLATFORM['all']) except $($ExcludePlatformsNames -join $AllPartsDelimiter)$DeviceFilterString"            
         }
-        return $CA_PLATFORM['all']
+        return "$($CA_PLATFORM['all'])$DeviceFilterString"
     }
 
     $Platforms = $IncludePlatforms | ForEach-Object {
@@ -456,7 +474,7 @@ function Resolve-CaPlatform {
     }
 
     # Return included platforms
-    return $Platforms -join $CA_AND_DELIMITER
+    return "$($Platforms -join $AllPartsDelimiter)$DeviceFilterString"
 }
 
 
@@ -472,63 +490,104 @@ function Resolve-CaResponse {
         $NamedLocations
     )
 
-    $Controls = @()
+    # BLOCK CONTROLS
 
-    # Resolve block controls which could have additional details
     if ($Policy.grantControls?.builtInControls -contains 'block') {
+
+        $Block = @()
 
         # Location-based blocks
         $IncludeLocations = $Policy.conditions.locations?.includeLocations
         $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
         if ($IncludeLocations -and $IncludeLocations -notcontains 'All') {
-            $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $CA_AND_DELIMITER
-            $Controls += $CA_RESPONSE['BlockLocations'].Replace('<Locations>', $Locations)
+            $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
+            $Block += $CA_RESPONSE['BlockLocations'].Replace('{Locations}', $Locations)
         }
         elseif ($ExcludeLocations -and $ExcludeLocations -notcontains 'All') {
-            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $CA_AND_DELIMITER
-            $Controls += $CA_RESPONSE['OnlyAllowLocations'].Replace('<Locations>', $Locations)
+            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
+            $Block += $CA_RESPONSE['OnlyAllowLocations'].Replace('{Locations}', $Locations)
         }
 
         # Block legacy authentication  
         if ($Policy.conditions.clientAppTypes -contains 'other' -and $Policy.conditions.clientAppTypes -contains 'exchangeActiveSync') {
-            $Controls += $CA_RESPONSE['BLockLegacyAuthentication']
+            $Block += $CA_RESPONSE['BLockLegacyAuthentication']
         }
 
         # Block authentication flows
         $TransferMethods = $Policy.conditions | Select-Object -ExpandProperty authenticationFlows -ErrorAction Ignore | Select-Object -ExpandProperty transferMethods -ErrorAction Ignore
         if ($null -ne $TransferMethods -and $TransferMethods.IndexOf('deviceCodeFlow') -ge 0 -and $TransferMethods.Indexof('authenticationTransfer') -ge 0 ) {
-            $Controls += $CA_RESPONSE['BlockAuthenticationFlows']
+            $Block += $CA_RESPONSE['BlockAuthenticationFlows']
         }
 
         # Normal block control if no specific block reason found
-        if ($Controls.count -eq 0) {
-            $Controls = $CA_RESPONSE['Block'] 
+        if ($Block.count -eq 0) {
+            $Block = $CA_RESPONSE['Block'] 
         }
 
-        return $Controls -join $CA_AND_DELIMITER
+        return $Block -join $AllPartsDelimiter
     }
 
-    # Resolve requirement controls
+    # REQUIREMENT CONTROLS
+
+    $RequirementControls = @()
+
     if ($Policy.grantControls?.builtInControls -contains 'mfa') {
-        $Controls += $CA_RESPONSE['mfa']
+        $RequirementControls += $CA_RESPONSE['mfa']
     }
 
     $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
     if ($AuthenticationStrength) {
-        $Controls += $CA_RESPONSE['AuthenticationStrength'].Replace('<AuthStrength>', $AuthenticationStrength.displayName)
+        $RequirementControls += $CA_RESPONSE['AuthenticationStrength'].Replace('{AuthStrength}', $AuthenticationStrength.displayName)
     }
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantDevice') {
-        $Controls += $CA_RESPONSE['ComplientDevice']
+        $RequirementControls += $CA_RESPONSE['ComplientDevice']
+    }
+
+    if ($Policy.grantControls?.builtInControls -contains 'domainJoinedDevice') {
+        $RequirementControls += $CA_RESPONSE['DomainJoinedDevice']
     }
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
-        $Controls += $CA_RESPONSE['AppProtectionPolicy']
+        $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
     }
 
-    # Resolve session controls
+    $Controls = @()
+    if ($RequirementControls.count -gt 0) {
+        if ($Policy.grantControls.operator -eq 'OR') {
+            $RequirementControlOperator = $AnyPartsDelimiter
+        }
+        else {
+            $RequirementControlOperator = $AllPartsDelimiter
+        }
+        $Controls += "Require $($RequirementControls -join $RequirementControlOperator)"
+    }
+
+    # SESSION CONTROLS
+
+    $SessionControls = @()
+
     if ($Policy.sessionControls?.applicationEnforcedRestrictions?.isEnabled) {
-        $Controls += $CA_RESPONSE['AppEnforcedRestrictions']
+        $SessionControls += $CA_RESPONSE['AppEnforcedRestrictions']
+    }
+
+    # Resolve Conditional Access App Control (AKA Cloud App Security) session controls
+    $CloudAppSecurity = $Policy.sessionControls?.cloudAppSecurity
+    if ($CloudAppSecurity) {
+        switch ($CloudAppSecurity.cloudAppSecurityType) {
+            'monitorOnly' {
+                $SessionControls += $CA_RESPONSE['CloudAppSecurityMonitorOnly']
+            }
+            'blockDownloads' {
+                $SessionControls += $CA_RESPONSE['CloudAppSecurityBlockDownloads']
+            }
+            'mcasConfigured' {
+                $SessionControls += $CA_RESPONSE['CloudAppSecurityCustomPolicy']
+            }
+            default {
+                Write-Warning "Unrecognized Conditional Access App Control mode '$($CloudAppSecurity.cloudAppSecurityType)' in policy '$($Policy.displayName)'"
+            }
+        }
     }
 
     $SignInFrequency = $Policy.sessionControls?.signInFrequency
@@ -542,35 +601,136 @@ function Resolve-CaResponse {
         else {
             $FrequencyText = 'Unresolved'
         }
-        $Controls += $CA_RESPONSE['SignInFrequency'].Replace('<SignInFrequency>', $FrequencyText)
+        $SessionControls += $CA_RESPONSE['SignInFrequency'].Replace('{SignInFrequency}', $FrequencyText)
     }
 
     $PersistentBrowser = $Policy.sessionControls?.persistentBrowser
     if ($PersistentBrowser) {
         if ($PersistentBrowser.mode -eq 'never') {
-            $Controls += $CA_RESPONSE['PersistentBrowserNever']
+            $SessionControls += $CA_RESPONSE['PersistentBrowserNever']
         }
         else {
-            $Controls += $CA_RESPONSE['PersistentBrowserAlways']             
+            $SessionControls += $CA_RESPONSE['PersistentBrowserAlways']             
         }
     }
 
     $ContinuousAccessEvaluation = $Policy.sessionControls?.continuousAccessEvaluation
     if ($ContinuousAccessEvaluation) {
         if ($ContinuousAccessEvaluation.mode -eq 'strictLocation') {
-            $Controls += $CA_RESPONSE['ContinuousAccessEvaluationStrictLocation']
+            $SessionControls += $CA_RESPONSE['ContinuousAccessEvaluationStrictLocation']
         }
         else {
-            $Controls += $CA_RESPONSE['ContinuousAccessEvaluationDisabled']             
+            $SessionControls += $CA_RESPONSE['ContinuousAccessEvaluationDisabled']             
         }
     }
+    if ($Policy.sessionControls?.disableResilienceDefaults -eq $true) {
+        $SessionControls += $CA_RESPONSE['DisableResilienceDefaults']
+    }
+
+    if ($SessionControls.count -gt 0) {
+        $Controls += $SessionControls -join $AllPartsDelimiter
+    }
+
 
     # Return responses
     if ($Controls.count -gt 0) {
-        return $Controls
+        return $Controls -join $AllPartsDelimiter
     }
     return $CA_RESPONSE['Unresolved']
 }
+
+
+
+function New-CaPolicyName {
+    <#
+    .SYNOPSIS
+    Renders a Conditional Access policy name from a pattern and a context map.
+
+    .DESCRIPTION
+    Accepts a pattern string containing placeholders (e.g., "{SerialNumber}") and a hashtable
+    of values. Supports simple format filters like Upper, Lower, Trim, and IfEmpty:Text.
+
+    .EXAMPLE
+    $ctx = @{
+        SerialNumber   = '010'
+        Persona        = 'Global'
+        TargetResource = 'All apps'
+        Platform       = 'Any unknown platform'
+        Response       = 'Block'
+    }
+    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx
+    # -> "CA010 - Global - All apps - Any unknown platform - Block"
+
+    .EXAMPLE
+    New-CaPolicyName -Pattern '{Persona} | {TargetResource} | {Response} ({SerialNumber})' -Context $ctx
+    # -> "Global | All apps | Block (010)"
+
+    .EXAMPLE
+    # Empty values are trimmed automatically
+    $ctx.Platform = ''
+    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx
+    # -> "CA010 - Global - All apps - Block"
+
+    .EXAMPLE
+    # Filters
+    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona|Upper} - {Response|Lower}' -Context $ctx
+    # -> "CA010 - GLOBAL - block"
+
+    .EXAMPLE
+    # IfEmpty fallback for optional fields
+    New-CaPolicyName -Pattern '{Persona} - {TargetResource} - {Platform|IfEmpty:Any platform} - {Response}' -Context $ctx
+    # -> "Global - All apps - Any platform - Block"
+    #>
+
+    [CmdletBinding()]
+    param(
+        # Pattern with placeholders, e.g., "CA{SerialNumber} - {Persona} - {Response}"
+        [Parameter(Mandatory)]
+        [string] $Pattern,
+
+        # Map of values for placeholders
+        [Parameter(Mandatory)]
+        [hashtable] $Context
+    )
+
+    # Regex: {Key} or {Key|Filter[:Arg]}
+    $placeholder = '\{(?<key>\w+)(?:\|(?<filter>\w+)(?::(?<arg>[^}]+))?)?\}'
+
+    # Replace placeholders
+    $rendered = [System.Text.RegularExpressions.Regex]::Replace($Pattern, $placeholder, {
+            param($m)
+
+            $key = $m.Groups['key'].Value
+            $filter = $m.Groups['filter'].Value
+            $arg = $m.Groups['arg'].Value
+
+            # Fetch value; treat missing as empty
+            $val = if ($Context.ContainsKey($key)) { [string]$Context[$key] } else { '' }
+
+            # Apply filter(s) — single filter supported per token for simplicity
+            switch ($filter) {
+                'Upper' { $val = $val.ToUpperInvariant() }
+                'Lower' { $val = $val.ToLowerInvariant() }
+                'Trim' { $val = $val.Trim() }
+                'IfEmpty' { if ([string]::IsNullOrWhiteSpace($val)) { $val = $arg } }
+                default { } # no filter or unsupported filter
+            }
+
+            # Return possibly-empty value; we clean delimiters post-process
+            return $val
+        })
+
+    # Clean up redundant delimiters caused by empty values:
+    # Strategy: collapse any "space-dash-space" sequences where a component became empty, then trim.
+    # You can expand this to other separators if you use custom punctuation.
+    $rendered = $rendered -replace '(?<sep>\s*[-|,;]\s*)(?=\s*[-|,;]\s*)', ''     # remove repeated separators
+    $rendered = $rendered -replace '(\s*[-|,;]\s*){2,}', ' - '                    # collapse to single " - "
+    $rendered = $rendered -replace '(^\s*[-|,;]\s*|\s*[-|,;]\s*$)', ''            # strip leading/trailing sep
+    $rendered = $rendered -replace '\s{2,}', ' '                                  # normalize spaces
+
+    return $rendered.Trim()
+}
+
 
 #endregion
 
@@ -580,7 +740,7 @@ function Resolve-CaResponse {
 $MgContext = Confirm-GraphConnection -RequiredScopes $GRAPH_SCOPES
 
 # Fetch Conditional Access policies and related objects
-$UnfilteredMgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property displayName
+$UnfilteredMgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property createdDateTime
 $MgPolicyTemplates = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/templates" -Verbose:$false | Select-Object -ExpandProperty value
 $MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
 
@@ -607,41 +767,24 @@ if ($SerialNumbersInUse.count -eq 0) {
 }
 
 # Process each policy
-foreach ($MgPolicy in $MgPolicies) {
+$RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
     try {
 
         # Write-Host $MgPolicy.displayName -ForegroundColor Cyan
 
-        # Initialize recommended policy name
-        $RecommendedPolicyName = $PolicyNameTemplate  
-
+        # Resolve policy name components
         $Persona = Resolve-CaPersona -Policy $MgPolicy
-
-        if ($RecommendedPolicyName.Contains('<Persona>')) {
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Persona>', $Persona.Name
+        $NameComponents = @{
+            'SerialNumber'   = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix "$SerialNumberPrefix$($Persona.SerialDigits)"
+            'Persona'        = $Persona.Name
+            'TargetResource' = Resolve-CaTargetResource -Policy $MgPolicy
+            'Platform'       = Resolve-CaPlatform -Policy $MgPolicy
+            'Response'       = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
         }
 
-        # Determine serial number
-        if ($RecommendedPolicyName.Contains('<SerialNumber>')) {
-            $SerialNumber = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix $Persona.SerialPrefix
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<SerialNumber>', $SerialNumber 
-        }
-    
-        if ($RecommendedPolicyName.Contains('<TargetResource>')) {
-            $TargetResource = Resolve-CaTargetResource -Policy $MgPolicy
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<TargetResource>', $TargetResource
-        }
+        # Generate recommended policy name
+        $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents
 
-        if ($RecommendedPolicyName.Contains('<Platform>')) {
-            $Platform = Resolve-CaPlatform -Policy $MgPolicy
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Platform>', $Platform
-        }
-
-        if ($RecommendedPolicyName.Contains('<Response>')) {
-            $Response = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
-            $RecommendedPolicyName = $RecommendedPolicyName -replace '<Response>', $Response -join $CA_AND_DELIMITER
-        }
-        
         # Limit name length to maximum 128 characters
         if ($RecommendedPolicyName.Length -gt 128) {
             $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
@@ -655,6 +798,12 @@ foreach ($MgPolicy in $MgPolicies) {
             NameLength            = $RecommendedPolicyName.Length
             #ComplianceStatus      = 'TODO'
         }   
+
+        if ($MgPolicy.displayName -eq 'DUMP') {
+        throw "DUMP POLICY"
+    }
+
+
     }
     catch {
         $_
@@ -662,5 +811,5 @@ foreach ($MgPolicy in $MgPolicies) {
         return 
     }        
 }
-
+$RecommendedPolicyNames | Write-Output 
 #endregion MAIN
