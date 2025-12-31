@@ -181,9 +181,8 @@ $CA_RESPONSE = @{
     'ContinuousAccessEvaluationStrictLocation' = 'Strict location CAE'
     'ContinuousAccessEvaluationDisabled'       = 'Disable CAE'
     'DisableResilienceDefaults'                = 'Disable resilience defaults'
-    #TODO: Disable resilience defaults
-    #TODO: Token protection
-    #TODO: Use GSA security profile
+    'RequireTokenProtection' = "Require token protection"
+    #TODO: Add handling of Global Secure Access security profiles
 
     # Unresolved
     'Unresolved'                               = 'Unresolved response'
@@ -552,7 +551,7 @@ function Resolve-CaResponse {
         $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
     }
 
-    $Controls = @()
+    $Response = @()
     if ($RequirementControls.count -gt 0) {
         if ($Policy.grantControls.operator -eq 'OR') {
             $RequirementControlOperator = $AnyPartsDelimiter
@@ -560,7 +559,7 @@ function Resolve-CaResponse {
         else {
             $RequirementControlOperator = $AllPartsDelimiter
         }
-        $Controls += "Require $($RequirementControls -join $RequirementControlOperator)"
+        $Response += "Require $($RequirementControls -join $RequirementControlOperator)"
     }
 
     # SESSION CONTROLS
@@ -627,15 +626,20 @@ function Resolve-CaResponse {
         $SessionControls += $CA_RESPONSE['DisableResilienceDefaults']
     }
 
-    if ($SessionControls.count -gt 0) {
-        $Controls += $SessionControls -join $AllPartsDelimiter
+    if ($Policy.sessionControls?.secureSignInSession?.isEnabled -eq $true) {
+        $SessionControls += $CA_RESPONSE['RequireTokenProtection']
     }
 
+    # Add session controls to response
+    if ($SessionControls.count -gt 0) {
+        $Response += $SessionControls -join $AllPartsDelimiter
+    }
 
     # Return responses
-    if ($Controls.count -gt 0) {
-        return $Controls -join $AllPartsDelimiter
+    if ($Response.count -gt 0) {
+        return $Response -join $AllPartsDelimiter
     }
+
     return $CA_RESPONSE['Unresolved']
 }
 
