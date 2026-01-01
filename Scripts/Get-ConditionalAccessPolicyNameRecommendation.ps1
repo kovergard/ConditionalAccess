@@ -6,24 +6,28 @@ param(
     # Pattern for the suggested policy names
     [Parameter()]
     [string]
-    $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}',
+    $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Network} - {Condition} - {AccessControl}',
 
-    # Delimiter used when all parts must be satisfied (logical AND)
+    # Prefix for all new serial numbers
     [Parameter()]
     [string] 
     $SerialNumberPrefix = 'CA',
  
     # Delimiter used when all parts must be satisfied (logical AND)
     [Parameter()]
-    [Alias('AndSeparator', 'RequireAllDelimiter')]
     [string]
     $AllPartsDelimiter = ' and ',
 
     # Delimiter used when any part may satisfy (logical OR)
     [Parameter()]
-    [Alias('OrSeparator', 'MatchAnyDelimiter')]
     [string]
-    $AnyPartsDelimiter = ' or '
+    $AnyPartsDelimiter = ' or ',
+
+    # Delimiter used when a part is excluded from another part (logical AND NOT)
+    [Parameter()]
+    [string]
+    $ExcludePartsDelimiter = ' except '
+
 )
 #requires -version 7.4.0
 
@@ -45,68 +49,68 @@ $CA_SERIAL_NUMBER_REGEX = "^$($SerialNumberPrefix)\d{2,4}"
 # Persona definitions
 $CA_PERSONA = @(
     @{
-        Name           = 'Global'
-        EntraGroupName = 'CA-Persona-Global'
-        SerialDigits   = '0'
-        MatchAll       = $true
+        Name              = 'Global'
+        EntraGroupName    = 'CA-Persona-Global'
+        SerialNumberGroup = '0'
+        MatchAll          = $true
     }
     @{
-        Name           = 'Admins'
-        EntraGroupName = 'CA-Persona-Admins'
-        SerialDigits   = '1'
-        MatchRoles     = $true
+        Name              = 'Admins'
+        EntraGroupName    = 'CA-Persona-Admins'
+        SerialNumberGroup = '1'
+        MatchRoles        = $true
     }
     @{
-        Name           = 'Internals' 
-        EntraGroupName = 'CA-Persona-Internals'
-        SerialDigits   = '2'
+        Name              = 'Internals' 
+        EntraGroupName    = 'CA-Persona-Internals'
+        SerialNumberGroup = '2'
     }
     @{
-        Name           = 'Externals' 
-        EntraGroupName = 'CA-Persona-Externals'
-        SerialDigits   = '3'
+        Name              = 'Externals' 
+        EntraGroupName    = 'CA-Persona-Externals'
+        SerialNumberGroup = '3'
     }
     @{
-        Name           = 'Guests'
-        EntraGroupName = 'CA-Persona-Guests'
-        SerialDigits   = '4'
-        MatchGuests    = $true
+        Name              = 'Guests'
+        EntraGroupName    = 'CA-Persona-Guests'
+        SerialNumberGroup = '4'
+        MatchGuests       = $true
     }
     @{
-        Name           = 'GuestAdmins'
-        EntraGroupName = 'CA-Persona-GuestAdmins'
-        SerialDigits   = '5'
+        Name              = 'GuestAdmins'
+        EntraGroupName    = 'CA-Persona-GuestAdmins'
+        SerialNumberGroup = '5'
     }
     @{
-        Name           = 'Microsoft365ServiceAccounts'
-        EntraGroupName = 'CA-Persona-Microsoft365ServiceAccounts'
-        SerialDigits   = '6'
+        Name              = 'Microsoft365ServiceAccounts'
+        EntraGroupName    = 'CA-Persona-Microsoft365ServiceAccounts'
+        SerialNumberGroup = '6'
     }
     @{
-        Name           = 'AzureServiceAccounts'
-        EntraGroupName = 'CA-Persona-AzureServiceAccounts'
-        SerialDigits   = '7'
+        Name              = 'AzureServiceAccounts'
+        EntraGroupName    = 'CA-Persona-AzureServiceAccounts'
+        SerialNumberGroup = '7'
     }
     @{
-        Name           = 'CorpServiceAccounts'
-        EntraGroupName = 'CA-Persona-CorpServiceAccounts'
-        SerialDigits   = '8'
+        Name              = 'CorpServiceAccounts'
+        EntraGroupName    = 'CA-Persona-CorpServiceAccounts'
+        SerialNumberGroup = '8'
     }
     @{
-        Name           = 'WorkloadIdentities'
-        EntraGroupName = 'CA-Persona-WorkloadIdentities'
-        SerialDigits   = '9'
+        Name              = 'WorkloadIdentities'
+        EntraGroupName    = 'CA-Persona-WorkloadIdentities'
+        SerialNumberGroup = '9'
     }
     @{
-        Name           = 'Developers'
-        EntraGroupName = 'CA-Persona-Developers'
-        SerialDigits   = '10'
+        Name              = 'Developers'
+        EntraGroupName    = 'CA-Persona-Developers'
+        SerialNumberGroup = '10'
     }
     @{
-        Name           = 'Unknown'
-        EntraGroupName = 'CA-Persona-Unknown'
-        SerialDigits   = 'CAx'
-        MatchUnknown   = $true
+        Name              = 'Unknown'
+        EntraGroupName    = 'CA-Persona-Unknown'
+        SerialNumberGroup = '99'
+        MatchUnknown      = $true
     }
 )
 
@@ -137,6 +141,28 @@ $CA_USERACTION = @{
     'Unresolved'                    = 'Unresolved user action'
 }
 
+$CA_NETWORK = @{
+    'All'                = 'Any network'
+    'AllTrusted'            = 'Trusted networks'
+    #TODO: Add Compliant Network locations when supported
+    'Selected'          = '{Locations}'
+    'Unresolved'         = 'Unresolved network'
+}
+
+$CA_CONDITION = @{
+
+    'UserRiskLevels'      = "User risk levels '{UserRisks}'"
+
+    
+    'SignInRiskLevels'    = "Sign-in risk levels '{SignInRisks}'"
+
+    'Locations'           = "Locations '{Locations}'"
+    'DeviceStates'        = 'Device states'
+    'ClientAppTypes'      = 'Client app types'
+    'AuthenticationFlows' = 'Authentication flows'
+    'Unresolved'          = 'Unresolved condition'
+}
+
 $CA_PLATFORM = @{
     'all'          = 'Any platform'
     'android'      = 'Android'
@@ -149,16 +175,21 @@ $CA_PLATFORM = @{
     'Unresolved'   = 'Unresolved platform'
 }
 
+
 $CA_RESPONSE = @{
 
     # Grant controls - block types
     'Block'                                    = 'Block'
+    'BlockUserRisk'                            = "Block user risk levels '{Risks}'"
     'BlockLocations'                           = "Block locations '{Locations}'"
     'OnlyAllowLocations'                       = "Only allow locations '{Locations}'"
     'BLockLegacyAuthentication'                = 'Block legacy authentication'
     'BlockAuthenticationFlows'                 = 'Block authentication flows'
 
+    #TODO: Change blocks to "if CONDITION" statements instead, to support require password change on high risk, etc!
+
     # Grant controls - grant types
+    'RequirePrefix'                            = 'Require'
     'MFA'                                      = 'MFA'
     'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
     'ComplientDevice'                          = 'compliant device'
@@ -181,7 +212,7 @@ $CA_RESPONSE = @{
     'ContinuousAccessEvaluationStrictLocation' = 'Strict location CAE'
     'ContinuousAccessEvaluationDisabled'       = 'Disable CAE'
     'DisableResilienceDefaults'                = 'Disable resilience defaults'
-    'RequireTokenProtection' = "Require token protection"
+    'RequireTokenProtection'                   = 'Require token protection'
     #TODO: Add handling of Global Secure Access security profiles
 
     # Unresolved
@@ -424,7 +455,70 @@ function Resolve-CaTargetResource {
     return 'Unknown app or action'
 }
 
-function Resolve-CaPlatform {
+function Resolve-CaNetwork {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [hashtable]
+        $Policy,
+
+        [Parameter(Mandatory)]
+        [PSCustomObject]
+        $NamedLocations
+    )
+
+    $NetworksIncluded = @()
+    $NetworksExcluded = @()
+
+    # Resolve locations
+    $IncludeLocations = $Policy.conditions.locations?.includeLocations
+    $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
+
+    if ($null -eq $IncludeLocations -or $IncludeLocations -contains 'All') {
+        $NetworksIncluded += $CA_NETWORK['All']
+    }
+    elseif ($IncludeLocations -contains 'AllTrusted') {
+        $NetworksIncluded += $CA_NETWORK['AllTrusted']
+    }
+    else {
+        $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName)
+        if ($null -ne $Locations) {
+            $NetworksIncluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($Locations -join $AllPartsDelimiter))
+        }
+        else {
+            Write-Warning "Could not resolve included locations '$($IncludeLocations -join ', ')'"
+            $NetworksIncluded += $CA_NETWORK['Unresolved']
+        }
+    }
+
+    if ($null -ne $ExcludeLocations) {
+        if ($ExcludeLocations -contains 'AllTrusted') {
+            $NetworksExcluded += $CA_NETWORK['AllTrusted']
+        }
+        else {
+            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName)
+            if ($null -ne $Locations) {
+                $NetworksExcluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($Locations -join $AllPartsDelimiter))
+            }
+            else {
+                Write-Warning "Could not resolve excluded locations '$($ExcludeLocations -join ', ')'"
+                $NetworksExcluded += $CA_NETWORK['Unresolved']
+            }
+        }
+    }
+    
+    # Return networks
+    if ($NetworksIncluded.count -gt 0) {
+        if ($NetworksExcluded.count -gt 0) {
+            return "$($NetworksIncluded -join $AnyPartsDelimiter)$ExcludePartsDelimiter$($NetworksExcluded -join $AllPartsDelimiter)"
+        }
+        return $NetworksIncluded -join $AllPartsDelimiter
+    }
+
+    return $CA_NETWORK['Unresolved']
+}
+
+function Resolve-CaCondition {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -432,13 +526,25 @@ function Resolve-CaPlatform {
         $Policy
     )
 
+    $Conditions = @()
+
+    # User risk levels
+    $UserRisks = $Policy.conditions.userRiskLevels
+    if ($null -ne $UserRisks -and $UserRisks.count -gt 0) {
+        $Conditions += $CA_CONDITION['UserRiskLevels'].Replace('{UserRisks}', $UserRisks -join $AnyPartsDelimiter)
+    }
+
+    # Return conditions
+    return $Conditions -join $AllPartsDelimiter
+
+
     $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
     
     if ($Policy.conditions?.devices?.deviceFilter) {
-        $DeviceFilterString = " with device filter"
+        $DeviceFilterString = ' with device filter'
     }
     else {
-        $DeviceFilterString = ""
+        $DeviceFilterString = ''
     }
 
     # If no platforms are specified, all platforms are included
@@ -472,8 +578,6 @@ function Resolve-CaPlatform {
         }
     }
 
-    # Return included platforms
-    return "$($Platforms -join $AllPartsDelimiter)$DeviceFilterString"
 }
 
 
@@ -482,11 +586,7 @@ function Resolve-CaResponse {
     param (
         [Parameter(Mandatory)]
         [hashtable]
-        $Policy,
-
-        [Parameter(Mandatory)]
-        [PSCustomObject]
-        $NamedLocations
+        $Policy
     )
 
     # BLOCK CONTROLS
@@ -559,7 +659,7 @@ function Resolve-CaResponse {
         else {
             $RequirementControlOperator = $AllPartsDelimiter
         }
-        $Response += "Require $($RequirementControls -join $RequirementControlOperator)"
+        $Response += "$($CA_RESPONSE['RequirePrefix']) $($RequirementControls -join $RequirementControlOperator)"
     }
 
     # SESSION CONTROLS
@@ -726,7 +826,6 @@ function New-CaPolicyName {
 
     # Clean up redundant delimiters caused by empty values:
     # Strategy: collapse any "space-dash-space" sequences where a component became empty, then trim.
-    # You can expand this to other separators if you use custom punctuation.
     $rendered = $rendered -replace '(?<sep>\s*[-|,;]\s*)(?=\s*[-|,;]\s*)', ''     # remove repeated separators
     $rendered = $rendered -replace '(\s*[-|,;]\s*){2,}', ' - '                    # collapse to single " - "
     $rendered = $rendered -replace '(^\s*[-|,;]\s*|\s*[-|,;]\s*$)', ''            # strip leading/trailing sep
@@ -779,11 +878,12 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
         # Resolve policy name components
         $Persona = Resolve-CaPersona -Policy $MgPolicy
         $NameComponents = @{
-            'SerialNumber'   = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix "$SerialNumberPrefix$($Persona.SerialDigits)"
+            'SerialNumber'   = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix "$SerialNumberPrefix$($Persona.SerialNumberGroup)"
             'Persona'        = $Persona.Name
             'TargetResource' = Resolve-CaTargetResource -Policy $MgPolicy
-            'Platform'       = Resolve-CaPlatform -Policy $MgPolicy
-            'Response'       = Resolve-CaResponse -Policy $MgPolicy -NamedLocations $MgLocations
+            'Network'        = Resolve-CaNetwork -Policy $MgPolicy -NamedLocations $MgLocations
+            'Condition'      = Resolve-CaCondition -Policy $MgPolicy
+            # 'AccessControl'       = Resolve-CaAccessControl -Policy $MgPolicy
         }
 
         # Generate recommended policy name
@@ -804,8 +904,8 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
         }   
 
         if ($MgPolicy.displayName -eq 'DUMP') {
-        throw "DUMP POLICY"
-    }
+            throw 'DUMP POLICY'
+        }
 
 
     }
