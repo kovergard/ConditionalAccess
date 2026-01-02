@@ -28,6 +28,8 @@ param(
     [string]
     $ExcludePartsDelimiter = ' except '
 
+    #TODO: Additional parameters: -IgnoreFilter -Compress
+
 )
 #requires -version 7.4.0
 
@@ -142,23 +144,22 @@ $CA_USERACTION = @{
 }
 
 $CA_NETWORK = @{
-    'All'                = 'Any network'
-    'AllTrusted'            = 'Trusted networks'
+    'All'        = 'Any network'
+    'AllTrusted' = 'Trusted networks'
     #TODO: Add Compliant Network locations when supported
-    'Selected'          = '{Locations}'
-    'Unresolved'         = 'Unresolved network'
+    'Selected'   = '{Locations}'
+    'Unresolved' = 'Unresolved network'
 }
 
 $CA_CONDITION = @{
-
+    'None'                = 'Always'
     'UserRiskLevels'      = "User risk levels '{UserRisks}'"
-
-    
     'SignInRiskLevels'    = "Sign-in risk levels '{SignInRisks}'"
+    'InsiderRiskLevels'   = "Insider risk levels '{InsiderRisks}'"
+    'DevicePlatforms'     = "Platforms '{Platforms}'"
+    'ClientAppTypes'  = "Client apps '{ClientApps}'"
+    'DeviceFilters'      =  'Device filters'
 
-    'Locations'           = "Locations '{Locations}'"
-    'DeviceStates'        = 'Device states'
-    'ClientAppTypes'      = 'Client app types'
     'AuthenticationFlows' = 'Authentication flows'
     'Unresolved'          = 'Unresolved condition'
 }
@@ -460,30 +461,25 @@ function Resolve-CaNetwork {
     param (
         [Parameter(Mandatory)]
         [hashtable]
-        $Policy,
-
-        [Parameter(Mandatory)]
-        [PSCustomObject]
-        $NamedLocations
+        $Policy
     )
 
+    # Fetch named locations
+    $MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
+
+    # Resolve included networks
     $NetworksIncluded = @()
-    $NetworksExcluded = @()
-
-    # Resolve locations
-    $IncludeLocations = $Policy.conditions.locations?.includeLocations
-    $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
-
-    if ($null -eq $IncludeLocations -or $IncludeLocations -contains 'All') {
+    $IncludeLocations = @($Policy.conditions.locations | Select-Object -ExpandProperty includeLocations -ErrorAction Ignore)
+    if ($IncludeLocations.Count -eq 0 -or $IncludeLocations -contains 'All') {
         $NetworksIncluded += $CA_NETWORK['All']
     }
     elseif ($IncludeLocations -contains 'AllTrusted') {
         $NetworksIncluded += $CA_NETWORK['AllTrusted']
     }
     else {
-        $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName)
-        if ($null -ne $Locations) {
-            $NetworksIncluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($Locations -join $AllPartsDelimiter))
+        $LocationNames = ($MgLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName)
+        if ($null -ne $LocationNames) {
+            $NetworksIncluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($LocationNames -join $AllPartsDelimiter))
         }
         else {
             Write-Warning "Could not resolve included locations '$($IncludeLocations -join ', ')'"
@@ -491,14 +487,17 @@ function Resolve-CaNetwork {
         }
     }
 
-    if ($null -ne $ExcludeLocations) {
+    # Resolve excluded networks
+    $NetworksExcluded = @()
+    $ExcludeLocations = @($Policy.conditions.locations | Select-Object -ExpandProperty excludeLocations -ErrorAction Ignore)
+    if ($ExcludeLocations.count -gt 0) {
         if ($ExcludeLocations -contains 'AllTrusted') {
             $NetworksExcluded += $CA_NETWORK['AllTrusted']
         }
         else {
-            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName)
-            if ($null -ne $Locations) {
-                $NetworksExcluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($Locations -join $AllPartsDelimiter))
+            $LocationNames = ($MgLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName)
+            if ($null -ne $LocationNames) {
+                $NetworksExcluded += $CA_NETWORK['Selected'].Replace('{Locations}', ($LocationNames -join $AllPartsDelimiter))
             }
             else {
                 Write-Warning "Could not resolve excluded locations '$($ExcludeLocations -join ', ')'"
@@ -507,7 +506,7 @@ function Resolve-CaNetwork {
         }
     }
     
-    # Return networks
+    # Return resolved networks
     if ($NetworksIncluded.count -gt 0) {
         if ($NetworksExcluded.count -gt 0) {
             return "$($NetworksIncluded -join $AnyPartsDelimiter)$ExcludePartsDelimiter$($NetworksExcluded -join $AllPartsDelimiter)"
@@ -529,13 +528,54 @@ function Resolve-CaCondition {
     $Conditions = @()
 
     # User risk levels
-    $UserRisks = $Policy.conditions.userRiskLevels
-    if ($null -ne $UserRisks -and $UserRisks.count -gt 0) {
+    $UserRisks = @($Policy.conditions | Select-Object -ExpandProperty userRiskLevels -ErrorAction Ignore)
+    if ($UserRisks.count -gt 0) {
         $Conditions += $CA_CONDITION['UserRiskLevels'].Replace('{UserRisks}', $UserRisks -join $AnyPartsDelimiter)
     }
 
+    # Sign-in risk levels
+    $SignInRisks = @($Policy.conditions | Select-Object -ExpandProperty signInRiskLevels -ErrorAction Ignore)
+    if ($SignInRisks.count -gt 0) {
+        $Conditions += $CA_CONDITION['SignInRiskLevels'].Replace('{SignInRisks}', $SignInRisks -join $AnyPartsDelimiter)
+    }
+
+    # Insider risk levels
+    $InsiderRisks = @($Policy.conditions | Select-Object -ExpandProperty insiderRiskLevels -ErrorAction Ignore)
+    if ($InsiderRisks.count -gt 0) {
+        $Conditions += $CA_CONDITION['InsiderRiskLevels'].Replace('{InsiderRisks}', $InsiderRisks -join $AnyPartsDelimiter)
+    }
+
+    # Device platforms
+    $IncludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty includePlatforms -ErrorAction Ignore)
+    $ExcludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty excludePlatforms -ErrorAction Ignore)
+    if ($IncludePlatforms.count -gt 0 -and ($IncludePlatforms -notcontains 'all' -or $ExcludePlatforms.count -gt 0)) {
+        $PlatformsIncluded = $IncludePlatforms -join $AnyPartsDelimiter
+        $PlatformsExcluded = $ExcludePlatforms -join $AllPartsDelimiter
+        if ($PlatformsExcluded -ne '') {
+            $Conditions += $CA_CONDITION['DevicePlatforms'].Replace('{Platforms}', "$PlatformsIncluded$ExcludePartsDelimiter$PlatformsExcluded")
+        }
+        else {
+            $Conditions += $CA_CONDITION['DevicePlatforms'].Replace('{Platforms}', $PlatformsIncluded)
+        }
+    }
+    
+    # Client application types
+    $ClientAppTypes = @($Policy.conditions | Select-Object -ExpandProperty clientAppTypes -ErrorAction Ignore)
+    if ($ClientAppTypes.count -gt 0) {
+        $Conditions += $CA_CONDITION['ClientAppTypes'].Replace('{ClientApps}', $ClientAppTypes -join $AnyPartsDelimiter)
+    }
+
+    $DeviceFilters = @($Policy.conditions | Select-Object -ExpandProperty devices -ErrorAction Ignore | Select-Object -ExpandProperty deviceFilter -ErrorAction Ignore)
+    if ($DeviceFilters.count -gt 0) {
+        $Conditions += $CA_CONDITION['DeviceFilters']
+    }
+
     # Return conditions
-    return $Conditions -join $AllPartsDelimiter
+    if ($Conditions.count -gt 0) {
+        return $Conditions -join $AllPartsDelimiter
+    }
+
+    return $CA_CONDITION['None']
 
 
     $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
@@ -599,11 +639,11 @@ function Resolve-CaResponse {
         $IncludeLocations = $Policy.conditions.locations?.includeLocations
         $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
         if ($IncludeLocations -and $IncludeLocations -notcontains 'All') {
-            $Locations = ($NamedLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
+            $Locations = ($MgLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
             $Block += $CA_RESPONSE['BlockLocations'].Replace('{Locations}', $Locations)
         }
         elseif ($ExcludeLocations -and $ExcludeLocations -notcontains 'All') {
-            $Locations = ($NamedLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
+            $Locations = ($MgLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
             $Block += $CA_RESPONSE['OnlyAllowLocations'].Replace('{Locations}', $Locations)
         }
 
@@ -845,7 +885,6 @@ $MgContext = Confirm-GraphConnection -RequiredScopes $GRAPH_SCOPES
 # Fetch Conditional Access policies and related objects
 $UnfilteredMgPolicies = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/policies" -Verbose:$false | Select-Object -ExpandProperty value | Sort-Object -Property createdDateTime
 $MgPolicyTemplates = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/templates" -Verbose:$false | Select-Object -ExpandProperty value
-$MgLocations = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/$GRAPH_VERSION/identity/conditionalAccess/namedLocations" -Verbose:$false | Select-Object -ExpandProperty value
 
 # Filter Microsoft-managed policies
 $MgPolicies = $UnfilteredMgPolicies | ForEach-Object {
@@ -881,18 +920,18 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
             'SerialNumber'   = Resolve-CaSerialNumber -Policy $MgPolicy -Prefix "$SerialNumberPrefix$($Persona.SerialNumberGroup)"
             'Persona'        = $Persona.Name
             'TargetResource' = Resolve-CaTargetResource -Policy $MgPolicy
-            'Network'        = Resolve-CaNetwork -Policy $MgPolicy -NamedLocations $MgLocations
+            'Network'        = Resolve-CaNetwork -Policy $MgPolicy
             'Condition'      = Resolve-CaCondition -Policy $MgPolicy
-            # 'AccessControl'       = Resolve-CaAccessControl -Policy $MgPolicy
+            # 'Response'       = Resolve-CaResponse -Policy $MgPolicy
         }
 
         # Generate recommended policy name
         $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents
 
         # Limit name length to maximum 128 characters
-        if ($RecommendedPolicyName.Length -gt 128) {
-            $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
-        }
+#        if ($RecommendedPolicyName.Length -gt 128) {
+#            $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
+#        }
 
         # Output resultning object
         [PSCustomObject]@{
