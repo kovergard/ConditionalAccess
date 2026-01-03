@@ -6,7 +6,7 @@ param(
     # Pattern for the suggested policy names
     [Parameter()]
     [string]
-    $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Network} - {Condition} - {AccessControl}',
+    $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Network} - {Condition} - {Response}',
 
     # Prefix for all new serial numbers
     [Parameter()]
@@ -157,25 +157,11 @@ $CA_CONDITION = @{
     'SignInRiskLevels'    = "Sign-in risk levels '{SignInRisks}'"
     'InsiderRiskLevels'   = "Insider risk levels '{InsiderRisks}'"
     'DevicePlatforms'     = "Platforms '{Platforms}'"
-    'ClientAppTypes'  = "Client apps '{ClientApps}'"
-    'DeviceFilters'      =  'Device filters'
-
-    'AuthenticationFlows' = 'Authentication flows'
+    'ClientAppTypes'      = "Client apps '{ClientApps}'"
+    'DeviceFilters'       = 'Device filters applied'
+    'AuthenticationFlows' = "Authentication flows used"
     'Unresolved'          = 'Unresolved condition'
 }
-
-$CA_PLATFORM = @{
-    'all'          = 'Any platform'
-    'android'      = 'Android'
-    'iOS'          = 'iOS'
-    'linux'        = 'Linux'
-    'macOS'        = 'macOS'
-    'windowsPhone' = 'Windows Phone'
-    'windows'      = 'Windows'
-    'Unknown'      = 'Unknown platforms'
-    'Unresolved'   = 'Unresolved platform'
-}
-
 
 $CA_RESPONSE = @{
 
@@ -561,13 +547,20 @@ function Resolve-CaCondition {
     
     # Client application types
     $ClientAppTypes = @($Policy.conditions | Select-Object -ExpandProperty clientAppTypes -ErrorAction Ignore)
-    if ($ClientAppTypes.count -gt 0) {
+    if ($ClientAppTypes.count -gt 0 -and $ClientAppTypes -notcontains 'all') {
         $Conditions += $CA_CONDITION['ClientAppTypes'].Replace('{ClientApps}', $ClientAppTypes -join $AnyPartsDelimiter)
     }
 
+    # Add a notation if device filters are used
     $DeviceFilters = @($Policy.conditions | Select-Object -ExpandProperty devices -ErrorAction Ignore | Select-Object -ExpandProperty deviceFilter -ErrorAction Ignore)
     if ($DeviceFilters.count -gt 0) {
         $Conditions += $CA_CONDITION['DeviceFilters']
+    }
+
+    # Authentication flows 
+    $AuthenticationFlowTransferMethods = @($Policy.conditions | Select-Object -ExpandProperty authenticationFlows -ErrorAction Ignore | Select-Object -ExpandProperty transferMethods -ErrorAction Ignore)
+    if ($AuthenticationFlowTransferMethods.count -gt 0) {
+        $Conditions += $CA_CONDITION['AuthenticationFlows']
     }
 
     # Return conditions
@@ -576,48 +569,6 @@ function Resolve-CaCondition {
     }
 
     return $CA_CONDITION['None']
-
-
-    $IncludePlatforms = $Policy.conditions.platforms?.includePlatforms
-    
-    if ($Policy.conditions?.devices?.deviceFilter) {
-        $DeviceFilterString = ' with device filter'
-    }
-    else {
-        $DeviceFilterString = ''
-    }
-
-    # If no platforms are specified, all platforms are included
-    if ($null -eq $IncludePlatforms -or $IncludePlatforms -contains 'all') {
-        $ExcludePlatforms = $Policy.conditions.platforms?.excludePlatforms
-        if ($null -ne $ExcludePlatforms -and $ExcludePlatforms.count -gt 0) {
-            if ($ExcludePlatforms.count -eq 6) {
-                return "$($CA_PLATFORM['Unknown'])$DeviceFilterString"
-            }
-            $ExcludePlatformsNames = $ExcludePlatforms | ForEach-Object {
-                if ($CA_PLATFORM[$_]) {
-                    $CA_PLATFORM[$_]
-                }
-                else {
-                    Write-Warning "Unrecognized platform '$_' in policy '$($Policy.displayName)'"
-                    $CA_PLATFORM['Unresolved']
-                }
-            }
-            return "$($CA_PLATFORM['all']) except $($ExcludePlatformsNames -join $AllPartsDelimiter)$DeviceFilterString"            
-        }
-        return "$($CA_PLATFORM['all'])$DeviceFilterString"
-    }
-
-    $Platforms = $IncludePlatforms | ForEach-Object {
-        if ($CA_PLATFORM[$_]) {
-            $CA_PLATFORM[$_]
-        }
-        else {
-            Write-Warning "Unrecognized platform '$_' in policy '$($Policy.displayName)'"
-            $CA_PLATFORM['Unresolved']
-        }
-    }
-
 }
 
 
@@ -922,16 +873,16 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
             'TargetResource' = Resolve-CaTargetResource -Policy $MgPolicy
             'Network'        = Resolve-CaNetwork -Policy $MgPolicy
             'Condition'      = Resolve-CaCondition -Policy $MgPolicy
-            # 'Response'       = Resolve-CaResponse -Policy $MgPolicy
+            'Response'       = Resolve-CaResponse -Policy $MgPolicy
         }
 
         # Generate recommended policy name
         $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents
 
         # Limit name length to maximum 128 characters
-#        if ($RecommendedPolicyName.Length -gt 128) {
-#            $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
-#        }
+        #        if ($RecommendedPolicyName.Length -gt 128) {
+        #            $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
+        #        }
 
         # Output resultning object
         [PSCustomObject]@{
@@ -942,17 +893,14 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
             #ComplianceStatus      = 'TODO'
         }   
 
-        if ($MgPolicy.displayName -eq 'DUMP') {
-            throw 'DUMP POLICY'
-        }
-
-
     }
     catch {
         $_
         $MgPolicy | ConvertTo-Json -Depth 5
-        return 
+        return
     }        
 }
 $RecommendedPolicyNames | Write-Output 
+$MgPolicies | Where-Object {$_.displayName -eq 'DUMP'} | ConvertTo-Json -Depth 5 | Write-Output
+
 #endregion MAIN
