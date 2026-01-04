@@ -107,7 +107,7 @@ $CA_PERSONA = @(
     @{
         Name              = 'WorkloadIdentities'
         EntraGroupName    = 'CA-Persona-WorkloadIdentities'
-        SerialNumberGroup = '9'
+        SerialNumberGroup = '09'
     }
     @{
         Name              = 'Developers'
