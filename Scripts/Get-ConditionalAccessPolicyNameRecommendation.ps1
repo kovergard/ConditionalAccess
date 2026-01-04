@@ -35,7 +35,7 @@ param(
     $Condense
 
     #TODO: Additional parameters: -IgnoreFilter -UseGroupNames
-
+    #TODO: Add condi access policies in test tenant
 )
 #requires -version 7.4.0
 
@@ -59,50 +59,50 @@ $CA_PERSONA = @(
     @{
         Name              = 'Global'
         EntraGroupName    = 'CA-Persona-Global'
-        SerialNumberGroup = '0'
+        SerialNumberGroup = '00'
         MatchAll          = $true
     }
     @{
         Name              = 'Admins'
         EntraGroupName    = 'CA-Persona-Admins'
-        SerialNumberGroup = '1'
+        SerialNumberGroup = '01'
         MatchRoles        = $true
     }
     @{
         Name              = 'Internals' 
         EntraGroupName    = 'CA-Persona-Internals'
-        SerialNumberGroup = '2'
+        SerialNumberGroup = '02'
     }
     @{
         Name              = 'Externals' 
         EntraGroupName    = 'CA-Persona-Externals'
-        SerialNumberGroup = '3'
+        SerialNumberGroup = '03'
     }
     @{
         Name              = 'Guests'
         EntraGroupName    = 'CA-Persona-Guests'
-        SerialNumberGroup = '4'
+        SerialNumberGroup = '04'
         MatchGuests       = $true
     }
     @{
         Name              = 'GuestAdmins'
         EntraGroupName    = 'CA-Persona-GuestAdmins'
-        SerialNumberGroup = '5'
+        SerialNumberGroup = '05'
     }
     @{
         Name              = 'Microsoft365ServiceAccounts'
         EntraGroupName    = 'CA-Persona-Microsoft365ServiceAccounts'
-        SerialNumberGroup = '6'
+        SerialNumberGroup = '06'
     }
     @{
         Name              = 'AzureServiceAccounts'
         EntraGroupName    = 'CA-Persona-AzureServiceAccounts'
-        SerialNumberGroup = '7'
+        SerialNumberGroup = '07'
     }
     @{
         Name              = 'CorpServiceAccounts'
         EntraGroupName    = 'CA-Persona-CorpServiceAccounts'
-        SerialNumberGroup = '8'
+        SerialNumberGroup = '08'
     }
     @{
         Name              = 'WorkloadIdentities'
@@ -113,6 +113,12 @@ $CA_PERSONA = @(
         Name              = 'Developers'
         EntraGroupName    = 'CA-Persona-Developers'
         SerialNumberGroup = '10'
+    }
+    @{
+        Name              = 'Agents'
+        EntraGroupName    = 'CA-Persona-Agents'
+        SerialNumberGroup = '11'
+        MatchAgents       = $true
     }
     @{
         Name              = 'Unknown'
@@ -162,11 +168,12 @@ $CA_CONDITION = @{
     'UserRiskLevels'      = "User risk levels '{UserRisks}'"
     'SignInRiskLevels'    = "Sign-in risk levels '{SignInRisks}'"
     'InsiderRiskLevels'   = "Insider risk levels '{InsiderRisks}'"
+    'AgentIdRiskLevels'   = "Agent risk levels '{AgentRisks}'"
     'DevicePlatforms'     = "Platforms '{Platforms}'"
     'UnknownPlatforms'    = 'Any unknown platform'
     'ClientAppTypes'      = "Client apps '{ClientApps}'"
     'DeviceFilters'       = 'Device filters applied'
-    'AuthenticationFlows' = "Authentication flows used"
+    'AuthenticationFlows' = 'Authentication flows used'
     'Unresolved'          = 'Unresolved condition'
 }
 
@@ -179,12 +186,11 @@ $CA_RESPONSE = @{
     'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
     'ComplientDevice'                          = 'compliant device'
     'DomainJoinedDevice'                       = 'hybrid-joined device'
-    # Approved clients apps is retiring
-    'AppProtectionPolicy'                      = 'app protection policy'
+    # Approved clients apps is being retired
+    'CompliantApplication'                     = 'app protection policy'
     'PasswordChange'                           = 'password change'
-    'RiskRemediation'                        = 'risk remediation'
-    
-    #TODO: TOU?
+    'RiskRemediation'                          = 'risk remediation'
+    'TermsOfUse'                               = 'Terms of Use'
 
     # Session controls
     'AppEnforcedRestrictions'                  = 'Use app enforced restrictions'
@@ -334,6 +340,12 @@ function Resolve-CaPersona {
     }
     if ($Policy.conditions.users.includeGuestsOrExternalUsers -or $Policy.conditions.users.includeUsers -contains 'GuestsOrExternalUsers') {
         return $CA_PERSONA | Where-Object { $_['MatchGuests'] -eq $true }
+    }
+
+    # Check for agents
+    $AgentIdServicePrincipals = @($Policy.conditions.clientApplications | Select-Object -ExpandProperty includeAgentIdServicePrincipals)
+    if ($AgentIdServicePrincipals.Count -gt 0 -or $Policy.conditions.users.includeUsers -contains 'AllAgentIdUsers') {
+        return $CA_PERSONA | Where-Object { $_['MatchAgents'] -eq $true }
     }
 
     # Fallback to Unknown persona
@@ -529,10 +541,16 @@ function Resolve-CaCondition {
         $Conditions += $CA_CONDITION['InsiderRiskLevels'].Replace('{InsiderRisks}', $InsiderRisks -join $AnyPartsDelimiter)
     }
 
+    # Agent risk levels
+    $AgentRisks = @($Policy.conditions | Select-Object -ExpandProperty agentIdRiskLevels -ErrorAction Ignore)
+    if ($AgentRisks.count -gt 0) {
+        $Conditions += $CA_CONDITION['AgentIdRiskLevels'].Replace('{AgentRisks}', ($AgentRisks.Split(',')) -join $AnyPartsDelimiter)
+    }
+
     # Device platforms
     $IncludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty includePlatforms -ErrorAction Ignore)
     $ExcludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty excludePlatforms -ErrorAction Ignore)
-        if ($IncludePlatforms -contains 'all' -and $ExcludePlatforms.Count -eq 6) {
+    if ($IncludePlatforms -contains 'all' -and $ExcludePlatforms.Count -eq 6) {
         $Conditions += $CA_CONDITION['UnknownPlatforms']
     }
     elseif ($IncludePlatforms.count -gt 0 -and ($IncludePlatforms -notcontains 'all' -or $ExcludePlatforms.count -gt 0)) {
@@ -589,37 +607,19 @@ function Resolve-CaResponse {
 
     $RequirementControls = @()
 
-    if ($Policy.grantControls?.builtInControls -contains 'mfa') {
-        $RequirementControls += $CA_RESPONSE['mfa']
-    }
-
     $AuthenticationStrength = $Policy.grantControls?.authenticationStrength
     if ($AuthenticationStrength) {
         $RequirementControls += $CA_RESPONSE['AuthenticationStrength'].Replace('{AuthStrength}', $AuthenticationStrength.displayName)
     }
 
-    if ($Policy.grantControls?.builtInControls -contains 'compliantDevice') {
-        $RequirementControls += $CA_RESPONSE['ComplientDevice']
+    @('mfa', 'complientDevice', 'domainJoinedDevice', 'compliantApplication', 'passwordChange', 'riskRemediation') | ForEach-Object {
+        if ($Policy.grantControls?.builtInControls -contains $_) {
+            $RequirementControls += $CA_RESPONSE[$_]
+        }
     }
 
-    if ($Policy.grantControls?.builtInControls -contains 'domainJoinedDevice') {
-        $RequirementControls += $CA_RESPONSE['DomainJoinedDevice']
-    }
-
-    if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
-        $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
-    }
-
-        if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
-        $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
-    }
-
-    if ($Policy.grantControls?.builtInControls -contains 'passwordChange') {
-        $RequirementControls += $CA_RESPONSE['PasswordChange']
-    }
-
-    if ($Policy.grantControls?.builtInControls -contains 'riskRemediation') {
-        $RequirementControls += $CA_RESPONSE['RiskRemediation']
+    if ($Policy.grantControls?.termsOfUse) {
+        $RequirementControls += $CA_RESPONSE['termsOfUse']
     }
 
     $Response = @()
@@ -633,7 +633,7 @@ function Resolve-CaResponse {
         $Response += "$($CA_RESPONSE['RequirePrefix']) $($RequirementControls -join $RequirementControlOperator)"
     }
 
-    # SESSION CONTROLS
+    # Handle session controls
 
     $SessionControls = @()
 
@@ -767,8 +767,9 @@ function New-CaPolicyName {
             $w = $m.Value
             if ($w.Length -eq 1) {
                 [void]$sb.Append($w.ToUpperInvariant())
-            } else {
-                [void]$sb.Append($w.Substring(0,1).ToUpperInvariant())
+            }
+            else {
+                [void]$sb.Append($w.Substring(0, 1).ToUpperInvariant())
                 [void]$sb.Append($w.Substring(1).ToLowerInvariant())
             }
         }
@@ -782,17 +783,18 @@ function New-CaPolicyName {
     $rendered = [System.Text.RegularExpressions.Regex]::Replace(
         $Pattern,
         $placeholder,
-        [System.Text.RegularExpressions.MatchEvaluator]{
+        [System.Text.RegularExpressions.MatchEvaluator] {
             param($m)
 
             $key = $m.Groups['key'].Value
             $val = if ($Context.ContainsKey($key) -and $null -ne $Context[$key]) {
                 [string]$Context[$key]
-            } else {
+            }
+            else {
                 ''
             }
 
-            if ($Condense) {
+            if ($Condense -and $key -notin @('SerialNumber','Persona')) {
                 return Convert-ToPascalCase -Text $val
             }
             return $val
@@ -884,6 +886,6 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
     }        
 }
 $RecommendedPolicyNames | Write-Output 
-$MgPolicies | Where-Object {$_.displayName -eq 'DUMP'} | ConvertTo-Json -Depth 5 | Write-Output
+$MgPolicies | Where-Object { $_.displayName -eq 'DUMP' } | ConvertTo-Json -Depth 5 | Write-Output
 
 #endregion MAIN
