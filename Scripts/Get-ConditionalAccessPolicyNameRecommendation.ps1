@@ -7,6 +7,7 @@ param(
     [Parameter()]
     [string]
     $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Network} - {Condition} - {Response}',
+    #TODO: Microsoft pattern style: '{SerialNumber} - {TargetResource}: {Response} For {Persona} On {Network} When {Condition}'
 
     # Prefix for all new serial numbers
     [Parameter()]
@@ -26,9 +27,14 @@ param(
     # Delimiter used when a part is excluded from another part (logical AND NOT)
     [Parameter()]
     [string]
-    $ExcludePartsDelimiter = ' except '
+    $ExcludePartsDelimiter = ' except ',
 
-    #TODO: Additional parameters: -IgnoreFilter -Compress
+    # Condense each part to PascalCase and remove non-alphanumeric characters
+    [Parameter()]
+    [switch]
+    $Condense
+
+    #TODO: Additional parameters: -IgnoreFilter -UseGroupNames
 
 )
 #requires -version 7.4.0
@@ -157,6 +163,7 @@ $CA_CONDITION = @{
     'SignInRiskLevels'    = "Sign-in risk levels '{SignInRisks}'"
     'InsiderRiskLevels'   = "Insider risk levels '{InsiderRisks}'"
     'DevicePlatforms'     = "Platforms '{Platforms}'"
+    'UnknownPlatforms'    = 'Any unknown platform'
     'ClientAppTypes'      = "Client apps '{ClientApps}'"
     'DeviceFilters'       = 'Device filters applied'
     'AuthenticationFlows' = "Authentication flows used"
@@ -165,28 +172,16 @@ $CA_CONDITION = @{
 
 $CA_RESPONSE = @{
 
-    # Grant controls - block types
+    # Grant controls
     'Block'                                    = 'Block'
-    'BlockUserRisk'                            = "Block user risk levels '{Risks}'"
-    'BlockLocations'                           = "Block locations '{Locations}'"
-    'OnlyAllowLocations'                       = "Only allow locations '{Locations}'"
-    'BLockLegacyAuthentication'                = 'Block legacy authentication'
-    'BlockAuthenticationFlows'                 = 'Block authentication flows'
-
-    #TODO: Change blocks to "if CONDITION" statements instead, to support require password change on high risk, etc!
-
-    # Grant controls - grant types
     'RequirePrefix'                            = 'Require'
     'MFA'                                      = 'MFA'
     'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
     'ComplientDevice'                          = 'compliant device'
     'DomainJoinedDevice'                       = 'hybrid-joined device'
-    #Approved clients apps is retiring
+    # Approved clients apps is retiring
     'AppProtectionPolicy'                      = 'app protection policy'
     #TODO: Risk remidiation - requires P2
-
-    # INSIDER?
-    # RISKY SIGN-INS?
 
     # Session controls
     'AppEnforcedRestrictions'                  = 'Use app enforced restrictions'
@@ -534,7 +529,10 @@ function Resolve-CaCondition {
     # Device platforms
     $IncludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty includePlatforms -ErrorAction Ignore)
     $ExcludePlatforms = @($Policy.conditions.platforms | Select-Object -ExpandProperty excludePlatforms -ErrorAction Ignore)
-    if ($IncludePlatforms.count -gt 0 -and ($IncludePlatforms -notcontains 'all' -or $ExcludePlatforms.count -gt 0)) {
+        if ($IncludePlatforms -contains 'all' -and $ExcludePlatforms.Count -eq 6) {
+        $Conditions += $CA_CONDITION['UnknownPlatforms']
+    }
+    elseif ($IncludePlatforms.count -gt 0 -and ($IncludePlatforms -notcontains 'all' -or $ExcludePlatforms.count -gt 0)) {
         $PlatformsIncluded = $IncludePlatforms -join $AnyPartsDelimiter
         $PlatformsExcluded = $ExcludePlatforms -join $AllPartsDelimiter
         if ($PlatformsExcluded -ne '') {
@@ -580,44 +578,11 @@ function Resolve-CaResponse {
         $Policy
     )
 
-    # BLOCK CONTROLS
+    # Handle grant controls
 
     if ($Policy.grantControls?.builtInControls -contains 'block') {
-
-        $Block = @()
-
-        # Location-based blocks
-        $IncludeLocations = $Policy.conditions.locations?.includeLocations
-        $ExcludeLocations = $Policy.conditions.locations?.excludeLocations
-        if ($IncludeLocations -and $IncludeLocations -notcontains 'All') {
-            $Locations = ($MgLocations | Where-Object { $_.id -in $IncludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
-            $Block += $CA_RESPONSE['BlockLocations'].Replace('{Locations}', $Locations)
-        }
-        elseif ($ExcludeLocations -and $ExcludeLocations -notcontains 'All') {
-            $Locations = ($MgLocations | Where-Object { $_.id -in $ExcludeLocations } | Select-Object -ExpandProperty displayName) -join $AllPartsDelimiter
-            $Block += $CA_RESPONSE['OnlyAllowLocations'].Replace('{Locations}', $Locations)
-        }
-
-        # Block legacy authentication  
-        if ($Policy.conditions.clientAppTypes -contains 'other' -and $Policy.conditions.clientAppTypes -contains 'exchangeActiveSync') {
-            $Block += $CA_RESPONSE['BLockLegacyAuthentication']
-        }
-
-        # Block authentication flows
-        $TransferMethods = $Policy.conditions | Select-Object -ExpandProperty authenticationFlows -ErrorAction Ignore | Select-Object -ExpandProperty transferMethods -ErrorAction Ignore
-        if ($null -ne $TransferMethods -and $TransferMethods.IndexOf('deviceCodeFlow') -ge 0 -and $TransferMethods.Indexof('authenticationTransfer') -ge 0 ) {
-            $Block += $CA_RESPONSE['BlockAuthenticationFlows']
-        }
-
-        # Normal block control if no specific block reason found
-        if ($Block.count -eq 0) {
-            $Block = $CA_RESPONSE['Block'] 
-        }
-
-        return $Block -join $AllPartsDelimiter
+        return $CA_RESPONSE['Block'] 
     }
-
-    # REQUIREMENT CONTROLS
 
     $RequirementControls = @()
 
@@ -734,8 +699,6 @@ function Resolve-CaResponse {
     return $CA_RESPONSE['Unresolved']
 }
 
-
-
 function New-CaPolicyName {
     <#
     .SYNOPSIS
@@ -743,84 +706,90 @@ function New-CaPolicyName {
 
     .DESCRIPTION
     Accepts a pattern string containing placeholders (e.g., "{SerialNumber}") and a hashtable
-    of values. Supports simple format filters like Upper, Lower, Trim, and IfEmpty:Text.
+    of values. If -Condense is provided, each token's value is converted to PascalCase with
+    all non-alphanumeric characters removed.
 
     .EXAMPLE
     $ctx = @{
         SerialNumber   = '010'
-        Persona        = 'Global'
+        Persona        = 'Global user'
         TargetResource = 'All apps'
         Platform       = 'Any unknown platform'
         Response       = 'Block'
     }
-    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx
-    # -> "CA010 - Global - All apps - Any unknown platform - Block"
 
-    .EXAMPLE
-    New-CaPolicyName -Pattern '{Persona} | {TargetResource} | {Response} ({SerialNumber})' -Context $ctx
-    # -> "Global | All apps | Block (010)"
-
-    .EXAMPLE
-    # Empty values are trimmed automatically
-    $ctx.Platform = ''
-    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx
-    # -> "CA010 - Global - All apps - Block"
-
-    .EXAMPLE
-    # Filters
-    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona|Upper} - {Response|Lower}' -Context $ctx
-    # -> "CA010 - GLOBAL - block"
-
-    .EXAMPLE
-    # IfEmpty fallback for optional fields
-    New-CaPolicyName -Pattern '{Persona} - {TargetResource} - {Platform|IfEmpty:Any platform} - {Response}' -Context $ctx
-    # -> "Global - All apps - Any platform - Block"
+    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx -Condense
+    # -> "CA010 - GlobalUser - AllApps - AnyUnknownPlatform - Block"
     #>
 
     [CmdletBinding()]
     param(
-        # Pattern with placeholders, e.g., "CA{SerialNumber} - {Persona} - {Response}"
         [Parameter(Mandatory)]
-        [string] $Pattern,
+        [string]
+        $Pattern,
 
-        # Map of values for placeholders
         [Parameter(Mandatory)]
-        [hashtable] $Context
+        [hashtable]
+        $Context,
+
+        # Convert each token value to PascalCase; remove all non-alphanumeric chars
+        [Parameter()]
+        [switch]
+        $Condense
     )
 
-    # Regex: {Key} or {Key|Filter[:Arg]}
-    $placeholder = '\{(?<key>\w+)(?:\|(?<filter>\w+)(?::(?<arg>[^}]+))?)?\}'
+    # Helper: Convert text to PascalCase and strip non-alphanumerics
+    function Convert-ToPascalCase {
+        param([Parameter(Mandatory)][string]$Text)
 
-    # Replace placeholders
-    $rendered = [System.Text.RegularExpressions.Regex]::Replace($Pattern, $placeholder, {
+        # Extract alphanumeric "words" using the MatchCollection (StrictMode-safe)
+        $RegMatches = [System.Text.RegularExpressions.Regex]::Matches($Text, '[A-Za-z0-9]+')
+        if ($RegMatches.Count -eq 0) { return '' }
+
+        # Build PascalCase from the matches
+        $sb = New-Object System.Text.StringBuilder
+        foreach ($m in $RegMatches) {
+            $w = $m.Value
+            if ($w.Length -eq 1) {
+                [void]$sb.Append($w.ToUpperInvariant())
+            } else {
+                [void]$sb.Append($w.Substring(0,1).ToUpperInvariant())
+                [void]$sb.Append($w.Substring(1).ToLowerInvariant())
+            }
+        }
+        return $sb.ToString()
+    }
+
+    # Placeholder pattern: {Key}
+    $placeholder = '\{(?<key>\w+)\}'
+
+    # Replace placeholders with values (optionally condensed)
+    $rendered = [System.Text.RegularExpressions.Regex]::Replace(
+        $Pattern,
+        $placeholder,
+        [System.Text.RegularExpressions.MatchEvaluator]{
             param($m)
 
             $key = $m.Groups['key'].Value
-            $filter = $m.Groups['filter'].Value
-            $arg = $m.Groups['arg'].Value
-
-            # Fetch value; treat missing as empty
-            $val = if ($Context.ContainsKey($key)) { [string]$Context[$key] } else { '' }
-
-            # Apply filter(s) — single filter supported per token for simplicity
-            switch ($filter) {
-                'Upper' { $val = $val.ToUpperInvariant() }
-                'Lower' { $val = $val.ToLowerInvariant() }
-                'Trim' { $val = $val.Trim() }
-                'IfEmpty' { if ([string]::IsNullOrWhiteSpace($val)) { $val = $arg } }
-                default { } # no filter or unsupported filter
+            $val = if ($Context.ContainsKey($key) -and $null -ne $Context[$key]) {
+                [string]$Context[$key]
+            } else {
+                ''
             }
 
-            # Return possibly-empty value; we clean delimiters post-process
+            if ($Condense) {
+                return Convert-ToPascalCase -Text $val
+            }
             return $val
-        })
+        }
+    )
 
-    # Clean up redundant delimiters caused by empty values:
-    # Strategy: collapse any "space-dash-space" sequences where a component became empty, then trim.
-    $rendered = $rendered -replace '(?<sep>\s*[-|,;]\s*)(?=\s*[-|,;]\s*)', ''     # remove repeated separators
-    $rendered = $rendered -replace '(\s*[-|,;]\s*){2,}', ' - '                    # collapse to single " - "
-    $rendered = $rendered -replace '(^\s*[-|,;]\s*|\s*[-|,;]\s*$)', ''            # strip leading/trailing sep
-    $rendered = $rendered -replace '\s{2,}', ' '                                  # normalize spaces
+    # Clean up redundant delimiters caused by empty components
+    # - Collapse repeated separators (space-dash-space, pipes, commas, semicolons)
+    $rendered = $rendered -replace '(?<sep>\s*[-|,;]\s*)(?=\s*[-|,;]\s*)', ''
+    $rendered = $rendered -replace '(\s*[-|,;]\s*){2,}', ' - '
+    $rendered = $rendered -replace '(^\s*[-|,;]\s*|\s*[-|,;]\s*$)', ''
+    $rendered = $rendered -replace '\s{2,}', ' '
 
     return $rendered.Trim()
 }
@@ -848,7 +817,7 @@ $MgPolicies = $UnfilteredMgPolicies | ForEach-Object {
 }
 
 # Determine if a serial number standard is in use
-$PoliciesWithCaSn = $MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX
+$PoliciesWithCaSn = @($MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
 if ($PoliciesWithCaSn) {
     if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
         $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
@@ -877,19 +846,18 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
         }
 
         # Generate recommended policy name
-        $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents
-
-        # Limit name length to maximum 128 characters
-        #        if ($RecommendedPolicyName.Length -gt 128) {
-        #            $RecommendedPolicyName = $RecommendedPolicyName.Substring(0, 126) + '..'
-        #        }
+        if ($Condense) {
+            $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents -Condense
+        }
+        else {
+            $RecommendedPolicyName = New-CaPolicyName -Pattern $NamePattern -Context $NameComponents 
+        }
 
         # Output resultning object
         [PSCustomObject]@{
             #Id                    = $MgPolicy.id
             CurrentPolicyName     = $MgPolicy.displayName
             RecommendedPolicyName = $RecommendedPolicyName
-            NameLength            = $RecommendedPolicyName.Length
             #ComplianceStatus      = 'TODO'
         }   
 
