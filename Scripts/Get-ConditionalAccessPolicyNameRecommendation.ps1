@@ -181,7 +181,10 @@ $CA_RESPONSE = @{
     'DomainJoinedDevice'                       = 'hybrid-joined device'
     # Approved clients apps is retiring
     'AppProtectionPolicy'                      = 'app protection policy'
-    #TODO: Risk remidiation - requires P2
+    'PasswordChange'                           = 'password change'
+    'RiskRemediation'                        = 'risk remediation'
+    
+    #TODO: TOU?
 
     # Session controls
     'AppEnforcedRestrictions'                  = 'Use app enforced restrictions'
@@ -605,6 +608,18 @@ function Resolve-CaResponse {
 
     if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
         $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
+    }
+
+        if ($Policy.grantControls?.builtInControls -contains 'compliantApplication') {
+        $RequirementControls += $CA_RESPONSE['AppProtectionPolicy']
+    }
+
+    if ($Policy.grantControls?.builtInControls -contains 'passwordChange') {
+        $RequirementControls += $CA_RESPONSE['PasswordChange']
+    }
+
+    if ($Policy.grantControls?.builtInControls -contains 'riskRemediation') {
+        $RequirementControls += $CA_RESPONSE['RiskRemediation']
     }
 
     $Response = @()
