@@ -974,9 +974,10 @@ $SuggestedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
 
     }
     catch {
-        $_
-        $MgPolicy | ConvertTo-Json -Depth 5
-        return
+        # $_
+        # $MgPolicy | ConvertTo-Json -Depth 5
+        # return
+        Write-Warning "Error processing policy '$($MgPolicy.displayName)': $($_.Exception.Message)"
     }        
 }
 $SuggestedPolicyNames | Write-Output 
