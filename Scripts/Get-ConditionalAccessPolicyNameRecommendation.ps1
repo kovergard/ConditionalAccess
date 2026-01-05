@@ -54,8 +54,12 @@ $GRAPH_SCOPES = @(
     'Group.Read.All'
 )
 
-# Serial number regex for detection
-$CA_SERIAL_NUMBER_REGEX = "^$($SerialNumberPrefix)\d{2,4}"
+# The number of digits in new serial numbers following the prefix, e.g. 'CA{PERSONA_SERIAL_DIGITS}{COUNTER_SERIAL_DIGITS}'
+$PERSONA_SERIAL_DIGITS = 2
+$COUNTER_SERIAL_DIGITS = 2
+
+# Serial number regex for detection of existing serial numbers in policy names
+$CA_SERIAL_NUMBER_REGEX = "^$($SerialNumberPrefix)\d{2,$($PERSONA_SERIAL_DIGITS + $COUNTER_SERIAL_DIGITS)}"
 
 # Persona definitions
 $CA_PERSONA = @(
@@ -188,7 +192,7 @@ $CA_RESPONSE = @{
     'RequirePrefix'                            = 'Require'
     'MFA'                                      = 'MFA'
     'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
-    'ComplientDevice'                          = 'compliant device'
+    'CompliantDevice'                          = 'compliant device'
     'DomainJoinedDevice'                       = 'hybrid-joined device'
     # Approved clients apps are being retired
     'CompliantApplication'                     = 'app protection policy'
@@ -227,25 +231,6 @@ $SerialNumbersInUse = @()           # Track used serial numbers
 #endregion
 
 #region Helper functions
-
-function Convert-ToPascalCaseString {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [string]$InputString
-    )
-
-    process {
-        # Split on any non-alphanumeric group, drop empties, then capitalize each token
-        $tokens = $InputString -split '[^A-Za-z0-9]+' | Where-Object { $_.Length -gt 0 }
-
-        # Capitalize: first char upper, rest lower (digits are kept as-is)
-        ($tokens | ForEach-Object {
-            if ($_.Length -eq 1) { $_.ToUpper() }
-            else { $_.Substring(0, 1).ToUpper() + $_.Substring(1).ToLower() }
-        }) -join ''
-    }
-}
 
 function Confirm-GraphConnection {
     [CmdletBinding()]
@@ -356,6 +341,7 @@ function Resolve-CaPersona {
     return $CA_PERSONA | Where-Object { $_['MatchUnknown'] -eq $true }
 }
 
+
 function Resolve-CaSerialNumber {
     [CmdletBinding()]
     param (
@@ -368,20 +354,25 @@ function Resolve-CaSerialNumber {
         $Prefix
     )
 
+    # Define total length of serial numbers for validation
+    $SerialNumberLength = $Prefix.Length + $COUNTER_SERIAL_DIGITS
+
     # Check if an existing serial number should be reused
     $ExistingSn = ($Policy.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
+    
     if ($ExistingSn) {
         $SerialNumber = $ExistingSn.Matches.Value
         if ($KeepSerialNumbers) {
             return $SerialNumber
         }
-        if ($SerialNumber.StartsWith($Prefix)) {
+        if ($SerialNumber.StartsWith($Prefix) -and $SerialNumber.Length -eq $SerialNumberLength) {
             return $SerialNumber
         }
     }
 
     # Check existing serial numbers in use
     $ExistingSerialsForPrefix = $SerialNumbersInUse | Where-Object { $_ -like "$Prefix*" } | Sort-Object
+    # Write-Verbose "Existing serials for prefix '$Prefix': $($ExistingSerialsForPrefix -join ',')"
 
     if ($null -ne $ExistingSerialsForPrefix) {
         # Reuse the lowest available serial number
@@ -402,6 +393,8 @@ function Resolve-CaSerialNumber {
 
     return $NewSerial
 }
+
+
 
 
 function Resolve-CaTargetResource {
@@ -619,7 +612,7 @@ function Resolve-CaResponse {
         $RequirementControls += $CA_RESPONSE['AuthenticationStrength'].Replace('{AuthStrength}', $AuthenticationStrength.displayName)
     }
 
-    @('mfa', 'complientDevice', 'domainJoinedDevice', 'compliantApplication', 'passwordChange', 'riskRemediation') | ForEach-Object {
+    @('mfa', 'CompliantDevice', 'domainJoinedDevice', 'compliantApplication', 'passwordChange', 'riskRemediation') | ForEach-Object {
         if ($Policy.grantControls?.builtInControls -contains $_) {
             $RequirementControls += $CA_RESPONSE[$_]
         }
@@ -733,15 +726,15 @@ function New-CaPolicyName {
 
     .EXAMPLE
     $ctx = @{
-        SerialNumber   = '010'
+        SerialNumber   = 'CA0010'
         Persona        = 'Global user'
         TargetResource = 'All apps'
         Platform       = 'Any unknown platform'
         Response       = 'Block'
     }
 
-    New-CaPolicyName -Pattern 'CA{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx -Condense
-    # -> "CA010 - GlobalUser - AllApps - AnyUnknownPlatform - Block"
+    New-CaPolicyName -Pattern '{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx -Condense
+    # -> "CA0010 - GlobalUser - AllApps - AnyUnknownPlatform - Block"
     #>
 
     [CmdletBinding()]
@@ -843,7 +836,8 @@ $MgPolicies = $UnfilteredMgPolicies | ForEach-Object {
 # Determine if a serial number standard is in use
 $PoliciesWithCaSn = @($MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
 if ($PoliciesWithCaSn.count -gt 0) {
-    $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
+    $SerialNumberLength = $SerialNumberPrefix.Length + $PERSONA_SERIAL_DIGITS + $COUNTER_SERIAL_DIGITS
+    $SerialNumbersInUse = @($PoliciesWithCaSn.Matches | ForEach-Object { if ($_.Value.Length -eq $SerialNumberLength) { $_.Value } } | Sort-Object -Unique)
     if ($KeepSerialNumbers) {
         Write-Verbose 'Reusing existing serial numbers, even if they do not match the persona.'
     }
@@ -893,6 +887,6 @@ $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
     }        
 }
 $RecommendedPolicyNames | Write-Output 
-$MgPolicies | Where-Object { $_.displayName -eq 'DUMP' } | ConvertTo-Json -Depth 5 | Write-Output
+# $MgPolicies | Where-Object { $_.displayName -eq 'DUMP' } | ConvertTo-Json -Depth 5 | Write-Output
 
 #endregion MAIN
