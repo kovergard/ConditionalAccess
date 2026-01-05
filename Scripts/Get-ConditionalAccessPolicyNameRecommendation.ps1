@@ -7,7 +7,6 @@ param(
     [Parameter()]
     [string]
     $NamePattern = '{SerialNumber} - {Persona} - {TargetResource} - {Network} - {Condition} - {Response}',
-    #TODO: Microsoft pattern style: '{SerialNumber} - {TargetResource}: {Response} For {Persona} On {Network} When {Condition}'
 
     # Prefix for all new serial numbers
     [Parameter()]
@@ -29,13 +28,17 @@ param(
     [string]
     $ExcludePartsDelimiter = ' except ',
 
+    # Always keep existing serial numbers, even if they don't match the persona
+    [Parameter()]
+    [switch]
+    $KeepSerialNumbers,
+
     # Condense each part to PascalCase and remove non-alphanumeric characters
     [Parameter()]
     [switch]
     $Condense
 
-    #TODO: Additional parameters: -IgnoreFilter -UseGroupNames
-    #TODO: Add condi access policies in test tenant
+    #TODO: Future enhancements: Additional parameters -IgnoreFilter and -UseGroupNames
 )
 #requires -version 7.4.0
 
@@ -146,6 +149,7 @@ $CA_APP = @{
     'c44b4083-3bb0-49c1-b47d-974e53cbdf3c' = 'Azure portal'
     '14d82eec-204b-4c2f-b7e8-296a70dab67e' = 'Graph CLI'
     '2793995e-0a7d-40d7-bd35-6968ba142197' = 'MyApps'
+    'None'                                 = 'No app'
     'Unresolved'                           = 'Unresolved app'
 }
 
@@ -186,7 +190,7 @@ $CA_RESPONSE = @{
     'AuthenticationStrength'                   = "authentication strength '{AuthStrength}'"
     'ComplientDevice'                          = 'compliant device'
     'DomainJoinedDevice'                       = 'hybrid-joined device'
-    # Approved clients apps is being retired
+    # Approved clients apps are being retired
     'CompliantApplication'                     = 'app protection policy'
     'PasswordChange'                           = 'password change'
     'RiskRemediation'                          = 'risk remediation'
@@ -364,10 +368,13 @@ function Resolve-CaSerialNumber {
         $Prefix
     )
 
-    # Check if existing serial number can be reused
+    # Check if an existing serial number should be reused
     $ExistingSn = ($Policy.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
     if ($ExistingSn) {
         $SerialNumber = $ExistingSn.Matches.Value
+        if ($KeepSerialNumbers) {
+            return $SerialNumber
+        }
         if ($SerialNumber.StartsWith($Prefix)) {
             return $SerialNumber
         }
@@ -835,22 +842,22 @@ $MgPolicies = $UnfilteredMgPolicies | ForEach-Object {
 
 # Determine if a serial number standard is in use
 $PoliciesWithCaSn = @($MgPolicies.displayName | Select-String -Pattern $CA_SERIAL_NUMBER_REGEX)
-if ($PoliciesWithCaSn) {
-    if ($PoliciesWithCaSn.count -gt ($MgPolicies.count / 2)) {
-        $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
-        Write-Verbose 'Detected existing serial numbers. Will reuse serial numbers, if they match the personas.'
+if ($PoliciesWithCaSn.count -gt 0) {
+    $SerialNumbersInUse = $PoliciesWithCaSn.Matches | ForEach-Object { $_.Value } | Sort-Object -Unique
+    if ($KeepSerialNumbers) {
+        Write-Verbose 'Reusing existing serial numbers, even if they do not match the persona.'
+    }
+    else {
+        Write-Verbose 'Reusing existing serial numbers, if they match the persona.'
     }
 }
-if ($SerialNumbersInUse.count -eq 0) {
+else {
     Write-Verbose 'No serial numbers detected. All policies will get new serials.'
 }
 
 # Process each policy
 $RecommendedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
     try {
-
-        # Write-Host $MgPolicy.displayName -ForegroundColor Cyan
-
         # Resolve policy name components
         $Persona = Resolve-CaPersona -Policy $MgPolicy
         $NameComponents = @{
