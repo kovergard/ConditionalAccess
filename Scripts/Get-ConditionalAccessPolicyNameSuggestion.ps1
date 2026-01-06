@@ -1,20 +1,20 @@
 <#
-.SYNOPSIS
-Suggest names for Conditional Access policies based on their configuration.
-.DESCRIPTION
-Connects to Microsoft Graph to enumerate Conditional Access policies and returns suggested policy names using a configurable pattern. Supports condensing token values to PascalCase, reusing or generating serial numbers, and configurable delimiters for name parts.
-.EXAMPLE
-# Run with default options
-.\Get-ConditionalAccessPolicyNameSuggestion.ps1
-
-.EXAMPLE
-# Run and condense token values while preserving existing serial numbers
-.\Get-ConditionalAccessPolicyNameSuggestion.ps1 -Condense -KeepSerialNumbers
-
-.NOTES
-Requires PowerShell 7.4.0+ and the Microsoft.Graph.Authentication module. The script uses the Microsoft Graph beta endpoint for newer Conditional Access features.
-.PARAMETER NamePattern
-Pattern string used to render suggested names; see the script's param block for full parameter details.
+    .SYNOPSIS
+    Suggest names for Conditional Access policies based on their configuration.
+    .DESCRIPTION
+    Connects to Microsoft Graph to enumerate Conditional Access policies and returns suggested policy names using a configurable pattern. 
+    Supports condensing token values to PascalCase, reusing or generating serial numbers, and configurable delimiters for name parts.
+    .EXAMPLE
+    # Run with default options
+    .\Get-ConditionalAccessPolicyNameSuggestion.ps1
+    .EXAMPLE
+    # Run and condense token values while preserving existing serial numbers
+    .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -Condense -KeepSerialNumbers
+    .NOTES
+    Requires PowerShell 7.4.0+ and the Microsoft.Graph.Authentication module. 
+    The script uses the Microsoft Graph beta endpoint for newer Conditional Access features.
+    .PARAMETER NamePattern
+    Pattern string used to render suggested names; see the script's param block for full parameter details.
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +27,7 @@ param(
     [Parameter()]
     [string] 
     $SerialNumberPrefix = 'CA',
- 
+
     # Delimiter used when all parts must be satisfied (logical AND)
     [Parameter()]
     [string]
@@ -253,12 +253,13 @@ $SerialNumbersInUse = @()           # Track used serial numbers
 #region Helper functions
 
 <#
-.SYNOPSIS
-Check Microsoft Graph connection and required scopes.
-.DESCRIPTION
-Verifies that the Microsoft.Graph.Authentication module is installed, that the session is connected to Microsoft Graph, and that the specified scopes are present. Returns the Graph context object when successful.
-.EXAMPLE
-Confirm-GraphConnection -RequiredScopes @('Policy.Read.All')
+    .SYNOPSIS
+    Check Microsoft Graph connection and required scopes.
+    .DESCRIPTION
+    Verifies that the Microsoft.Graph.Authentication module is installed, that the session is connected to Microsoft Graph, 
+    and that the specified scopes are present. Returns the Graph context object when successful.
+    .EXAMPLE
+    Confirm-GraphConnection -RequiredScopes @('Policy.Read.All')
 #>
 function Confirm-GraphConnection {
     [CmdletBinding()]
@@ -291,12 +292,12 @@ function Confirm-GraphConnection {
 }
 
 <#
-.SYNOPSIS
-Retrieve an Entra ID group (cached).
-.DESCRIPTION
-Fetches a group by its object id from Microsoft Graph and caches the result in the script-level cache to avoid repeated API calls.
-.EXAMPLE
-Get-EntraIdGroup -GroupId '00000000-0000-0000-0000-000000000000'
+    .SYNOPSIS
+    Retrieve an Entra ID group (cached).
+    .DESCRIPTION
+    Fetches a group by its object id from Microsoft Graph and caches the result in the script-level cache to avoid repeated API calls.
+    .EXAMPLE
+    Get-EntraIdGroup -GroupId '00000000-0000-0000-0000-000000000000'
 #>
 function Get-EntraIdGroup {
     [CmdletBinding()]
@@ -329,12 +330,13 @@ function Get-EntraIdGroup {
 }
 
 <#
-.SYNOPSIS
-Determine the persona for a Conditional Access policy.
-.DESCRIPTION
-Analyzes the policy's user conditions (included users, groups, roles, guests, agents) and returns the matching persona definition from the $CA_PERSONA lookup. Falls back to the Unknown persona when no specific match is found.
-.EXAMPLE
-Resolve-CaPersona -Policy $policy
+    .SYNOPSIS
+    Determine the persona for a Conditional Access policy.
+    .DESCRIPTION
+    Analyzes the policy's user conditions (included users, groups, roles, guests, agents) and returns the matching persona definition 
+    from the $CA_PERSONA lookup. Falls back to the Unknown persona when no specific match is found.
+    .EXAMPLE
+    Resolve-CaPersona -Policy $policy
 #>
 function Resolve-CaPersona {
     [CmdletBinding()]
@@ -390,12 +392,13 @@ function Resolve-CaPersona {
 
 
 <#
-.SYNOPSIS
-Resolve or generate a serial number for a policy.
-.DESCRIPTION
-Checks the policy display name for an existing serial number and decides whether to reuse it (honoring the -KeepSerialNumbers option). If none is suitable, generates a new unique serial using the provided prefix and the configured counter width.
-.EXAMPLE
-Resolve-CaSerialNumber -Policy $policy -Prefix 'CA00'
+    .SYNOPSIS
+    Resolve or generate a serial number for a policy.
+    .DESCRIPTION
+    Checks the policy display name for an existing serial number and decides whether to reuse it (honoring the -KeepSerialNumbers option). 
+    If none is suitable, generates a new unique serial using the provided prefix and the configured counter width.
+    .EXAMPLE
+    Resolve-CaSerialNumber -Policy $policy -Prefix 'CA00'
 #>
 function Resolve-CaSerialNumber {
     [CmdletBinding()]
@@ -451,12 +454,13 @@ function Resolve-CaSerialNumber {
 }
 
 <#
-.SYNOPSIS
-Resolve the target resource (apps or user actions) for a policy.
-.DESCRIPTION
-Converts included/excluded application and user action identifiers into a human-friendly string using the $CA_APP and $CA_USERACTION lookup tables. Emits warnings for unrecognized app ids or user actions.
-.EXAMPLE
-Resolve-CaTargetResource -Policy $policy
+    .SYNOPSIS
+    Resolve the target resource (apps or user actions) for a policy.
+    .DESCRIPTION
+    Converts included/excluded application and user action identifiers into a human-friendly string using the $CA_APP and $CA_USERACTION 
+    lookup tables. Emits warnings for unrecognized app ids or user actions.
+    .EXAMPLE
+    Resolve-CaTargetResource -Policy $policy
 #>
 function Resolve-CaTargetResource {
     [CmdletBinding()]
@@ -515,12 +519,13 @@ function Resolve-CaTargetResource {
 }
 
 <#
-.SYNOPSIS
-Resolve network (named locations) included/excluded in a policy.
-.DESCRIPTION
-Fetches named locations from Graph and translates the policy's include/exclude location ids into readable names, handling special values such as 'All' and 'AllTrusted'.
-.EXAMPLE
-Resolve-CaNetwork -Policy $policy
+    .SYNOPSIS
+    Resolve network (named locations) included/excluded in a policy.
+    .DESCRIPTION
+    Fetches named locations from Graph and translates the policy's include/exclude location ids into readable names, handling special values 
+    such as 'All' and 'AllTrusted'.
+    .EXAMPLE
+    Resolve-CaNetwork -Policy $policy
 #>
 function Resolve-CaNetwork {
     [CmdletBinding()]
@@ -585,12 +590,13 @@ function Resolve-CaNetwork {
 }
 
 <#
-.SYNOPSIS
-Resolve the conditions (risks, platforms, client apps, device filters, authentication flows) of a policy.
-.DESCRIPTION
-Collects various condition parts from the policy such as risk levels, platforms, client app types, device filters, and authentication flows and returns a human-friendly description joined by configured delimiters. Returns 'Always' when no specific conditions apply.
-.EXAMPLE
-Resolve-CaCondition -Policy $policy
+    .SYNOPSIS
+    Resolve the conditions (risks, platforms, client apps, device filters, authentication flows) of a policy.
+    .DESCRIPTION
+    Collects various condition parts from the policy such as risk levels, platforms, client app types, device filters, and authentication flows 
+    and returns a human-friendly description joined by configured delimiters. Returns 'Always' when no specific conditions apply.
+    .EXAMPLE
+    Resolve-CaCondition -Policy $policy
 #>
 function Resolve-CaCondition {
     [CmdletBinding()]
@@ -672,12 +678,13 @@ function Resolve-CaCondition {
 
 
 <#
-.SYNOPSIS
-Resolve grant and session controls into a readable response string.
-.DESCRIPTION
-Evaluates grant controls (including block and requirement controls) and various session controls, returning a concise, human-readable description of the policy's response behavior.
-.EXAMPLE
-Resolve-CaResponse -Policy $policy
+    .SYNOPSIS
+    Resolve grant and session controls into a readable response string.
+    .DESCRIPTION
+    Evaluates grant controls (including block and requirement controls) and various session controls, returning a concise, human-readable 
+    description of the policy's response behavior.
+    .EXAMPLE
+    Resolve-CaResponse -Policy $policy
 #>
 function Resolve-CaResponse {
     [CmdletBinding()]
@@ -803,8 +810,42 @@ function Resolve-CaResponse {
     return $CA_RESPONSE['Unresolved']
 }
 
-function New-CaPolicyName {
-    <#
+<#
+    .SYNOPSIS
+    Convert text to PascalCase and remove non-alphanumeric characters.
+    .DESCRIPTION
+    Extracts alphanumeric "words" from the input, capitalizes them appropriately and concatenates them into a PascalCase string. 
+    .EXAMPLE
+    Convert-ToPascalCase -Text 'All apps'  # -> 'AllApps'
+#>
+function Convert-ToPascalCase {
+    param(
+        # The input text to convert to PascalCase.
+        [Parameter(Mandatory)]
+        [string]
+        $Text
+    )
+
+    # Extract alphanumeric "words" using the MatchCollection (StrictMode-safe)
+    $RegMatches = [System.Text.RegularExpressions.Regex]::Matches($Text, '[A-Za-z0-9]+')
+    if ($RegMatches.Count -eq 0) { return '' }
+
+    # Build PascalCase from the matches
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($m in $RegMatches) {
+        $w = $m.Value
+        if ($w.Length -eq 1) {
+            [void]$sb.Append($w.ToUpperInvariant())
+        }
+        else {
+            [void]$sb.Append($w.Substring(0, 1).ToUpperInvariant())
+            [void]$sb.Append($w.Substring(1).ToLowerInvariant())
+        }
+    }
+    return $sb.ToString()
+}
+
+<#
     .SYNOPSIS
     Renders a Conditional Access policy name from a pattern and a context map.
 
@@ -817,8 +858,8 @@ function New-CaPolicyName {
     .EXAMPLE
     $ctx = @{ SerialNumber='CA0010'; Persona='Global user'; TargetResource='All apps'; Platform='Any unknown platform'; Response='Block' }
     New-CaPolicyName -Pattern '{SerialNumber} - {Persona} - {TargetResource} - {Platform} - {Response}' -Context $ctx -Condense
-    #>
-
+#>
+function New-CaPolicyName {
     [CmdletBinding()]
     param(
         # Pattern containing placeholders like '{SerialNumber}'.
@@ -836,41 +877,6 @@ function New-CaPolicyName {
         [switch]
         $Condense
     )
-
-    <#
-    .SYNOPSIS
-    Convert text to PascalCase and remove non-alphanumeric characters.
-    .DESCRIPTION
-    Extracts alphanumeric "words" from the input, capitalizes them appropriately and concatenates them into a PascalCase string. Used by New-CaPolicyName when the -Condense flag is specified.
-    .EXAMPLE
-    Convert-ToPascalCase -Text 'All apps'  # -> 'AllApps'
-    #>
-    function Convert-ToPascalCase {
-        param(
-            # The input text to convert to PascalCase.
-            [Parameter(Mandatory)]
-            [string]
-            $Text
-        )
-
-        # Extract alphanumeric "words" using the MatchCollection (StrictMode-safe)
-        $RegMatches = [System.Text.RegularExpressions.Regex]::Matches($Text, '[A-Za-z0-9]+')
-        if ($RegMatches.Count -eq 0) { return '' }
-
-        # Build PascalCase from the matches
-        $sb = New-Object System.Text.StringBuilder
-        foreach ($m in $RegMatches) {
-            $w = $m.Value
-            if ($w.Length -eq 1) {
-                [void]$sb.Append($w.ToUpperInvariant())
-            }
-            else {
-                [void]$sb.Append($w.Substring(0, 1).ToUpperInvariant())
-                [void]$sb.Append($w.Substring(1).ToLowerInvariant())
-            }
-        }
-        return $sb.ToString()
-    }
 
     # Placeholder pattern: {Key}
     $placeholder = '\{(?<key>\w+)\}'
@@ -974,9 +980,6 @@ $SuggestedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
 
     }
     catch {
-        # $_
-        # $MgPolicy | ConvertTo-Json -Depth 5
-        # return
         Write-Warning "Error processing policy '$($MgPolicy.displayName)': $($_.Exception.Message)"
     }        
 }
