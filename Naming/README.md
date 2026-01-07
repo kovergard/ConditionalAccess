@@ -1,8 +1,10 @@
 # Descriptive Conditional Access Naming
 
-One thing I often feel is missing from Conditional Access policies, is the ability to add a description to the policies, documenting their purpose. 
+Conditional Access policies can be pretty complicated to set up and maintain, and they are critical for securing access to your tenant.
 
-Instead, we are limited to whatever information we can cram into the name of the policy, and there are a lot of different approaches to naming.
+As the number of policies grow due to complex organizational demands, it would be great if we could add a description to the policies, documenting their purpose. 
+
+Alas, we are limited to whatever information we can cram into the name of the policy, and there are a lot of different approaches to naming.
 
 ## Naming standards
 
@@ -53,7 +55,7 @@ To address these and similar issues, I wrote `Get-ConditionalAccessPolicyNameSug
 
 This script can be used to generate consistent names for Conditional Access policies, based on the content of the policy. Examples of usage and output can be found below.
 
-**Please note:** It is not meant to be for documentation purposes or security auditing. If you are looking for something to help out with those areas, I recommend the following free resources instead:
+**Please note:** The script is NOT meant to be for documentation purposes or security auditing. If you are looking for something to help out with those areas, I recommend the following free resources instead:
 
 * Documentation: [IdPowerApp CA Documenter](https://idpowertoys.merill.net/ca)
 * Auditing: [Maester](https://github.com/maester365/maester)
