@@ -57,8 +57,8 @@ This script can be used to generate consistent names for Conditional Access poli
 
 **Please note:** The script is NOT meant to be for documentation purposes or security auditing. If you are looking for something to help out with those areas, I recommend the following free resources instead:
 
-* Documentation: [IdPowerApp CA Documenter](https://idpowertoys.merill.net/ca)
-* Auditing: [Maester](https://github.com/maester365/maester)
+* [IdPowerApp CA Documenter](https://idpowertoys.merill.net/ca) - Generates visually awesome documentation of the content of each policy
+* [Maester](https://github.com/maester365/maester) - Can check the content of your policies against different security frameworks.
 
 ## How to use the script
 
