@@ -96,44 +96,87 @@ Connect-MgGraph -Scopes Policy.Read.All,Application.Read.All,Group.Read.All
 
 The default name pattern uses serial numbers and personas from the Conditional Access Guidance for Zero Trust framework.
 
-Notice that the serial number is kept for `CA0315: Require TOU for consultants accessing SharePoint`  since it matches the right persona group and format. However, the `CA11 - Allow login without MFA from Factories` policy is assigned a new serial number, since it is not the right length.
+Notice that the serial number is kept for `CA0315: Require TOU for consultants accessing SharePoint` since it matches the right persona group and format. However, the `CA11 - Allow login without MFA from Factories` policy is assigned a new serial number, since it is not the right length.
 
 ```powershell
-# Condense names and keep existing serial numbers
+# Condense components and keep existing serial numbers
 .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -Condense -KeepSerialNumbers
 ```
 
 ![image](./images/NameSuggestion-Condense-KeepSerial.png)
 
-TODO
+The `-Condense` switch removes all spacing and special charcters inside each component, and converts the component to PascalCase string like `RequireMfaOrCompliantDeviceOrHybridJoinedDevice`.
+
+Note that `CA11 - Allow login without MFA from Factories` keeps its serial number, even if it doesnt match the right format. This is because of the `-KeepSerialNumbers` switch.
 
 ```powershell
-# Use a custom name pattern with condensed names for a compact result with no whitespaces.
+# Compact name pattern
 .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -NamePattern '{SerialNumber}-{Persona}-{TargetResource}-{Network}-{Condition}-{Response}' -Condense
 ```
 ![image](./images/NameSuggestion-CustomCondensed.png)
 
-TODO
+The combination of the `-NamePattern` parameter and the `-Condense` switch makes for a single long string without any spaces or special characters apart from the dash separating the components. 
 
 ```powershell
-# Custom name pattern, akin to the one Microsoft currently recommends on Microsoft Learn
+# Another custom name pattern
 .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -NamePattern '{SerialNumber} - {TargetResource}: {Response} For {Persona} On {Network} When {Condition}'
 ```
 
 ![image](./images/NameSuggestion-CustomMicrosoft.png)
 
-TODO
+The use `-NamePattern` here makes for names that are akin to what Microsoft currently recommends on Microsoft Learn.
 
 ## Pattern components
 
-The following components can be used in the pattern
+The following components can be used in the name pattern.
 
-- **SerialNumber**: Unique identifier (e.g., CA0001)
-- **Persona**: User category (Global, Admins, Internals, Externals, Guests, etc.)
-- **TargetResource**: Applications or user actions
-- **Network**: Named locations or network type
-- **Condition**: Risk levels, platforms, client apps
-- **Response**: Block or require controls
+**SerialNumber**
+
+A recommended unique identifier for the policy. This makes it easier to identify specific policies during implementation and troubleshooting, instead of matching a long a complex name. 
+
+By default, serial numbers are generated using `CA{PersonaSerialNumber}{Counter}`, so the first policy in the Admin persona would have the serial number CA0101.
+
+The "CA" prefix can be adjusted using the `-SerialNumberPrefix` parameter.
+
+**Persona**
+
+The Persona component uses definitions taken from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository, with the new addition of agents.
+
+The policies and personas are matched using group names in Entra ID with group names like `CA-Persona-{PersonaName}`. In case you want to use other groups, you will have to edit the `$CA_PERSONA` variable directly in the script.
+
+However, if you dont want to set up these groups, you don't need to! If one or more of groups do not exist, the script will assign policies to personas based on what user type the policies are assigned to. Check the table below for details on personas.
+
+| Persona                     | SerialNumber | Default match              | Description                                                                                   |
+| --------------------------- | ------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
+| Global                      | 00           | 'All Users'                | Global is used for policies that should apply across all personas, unless explicitly excluded |
+| Admins                      | 01           | Users with a role assigned | All non-guest accounts that have priviledged access                                           |
+| Internals                   | 02           |                            | Internal non-admin employee accounts, except developers                                       |
+| Externals                   | 03           |                            | External users with an internal non-admin account, like consultants and similar               |
+| Guests                      | 04           | All guests                 | All non-admin guest accounts                                                                  |
+| GuestAdmins                 | 05           |                            | All admin guest accounts                                                                      |
+| Microsoft365ServiceAccounts | 06           |                            | Cloud-native user-based service accounts used to access Microsoft 365 services                |
+| AzureServiceAccounts        | 07           |                            | Cloud-native user-based service accounts used to access  Microsoft Azure (IaaS/PaaS) services |
+| CorpServiceAccounts         | 08           |                            | Service account synchronized from on-premises AD used to access Azure/M365. Should be avoided |
+| WorkloadIdentities          | 09           |                            | Entra ID service principals and managed identities                                            |
+| Developers                  | 10           |                            | Internal or external developers                                                               |
+| Agents                      | 11           | All agents                 | AI Agents                                                                                     |
+
+
+**TargetResource**
+
+Applications or user actions
+
+**Network**
+
+Named locations or network type
+
+**Condition**
+
+Risk levels, platforms, client apps
+
+**Response**
+
+Block or require controls
 
 ---
 
