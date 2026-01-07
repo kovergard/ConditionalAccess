@@ -21,7 +21,7 @@ Require compliant or hybrid Azure AD joined device or multifactor authentication
 [Guidance](https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access#set-naming-standards-for-your-policies) from the Microsoft Learn site suggest using a standard prefixed with a serial number on this format:
 
 ```
-\<SN> - \<Cloud app>: \<Response> For \<Principal> When \<Conditions>
+<SN> - <Cloud app>: <Response> For <Principal> When <Conditions>
 ```
 which will give you names like this:
 ```
@@ -94,28 +94,35 @@ Connect-MgGraph -Scopes Policy.Read.All,Application.Read.All,Group.Read.All
 ```
 ![image](./images/NameSuggestion-Default.png)
 
-
 The default name pattern uses serial numbers and personas from the Conditional Access Guidance for Zero Trust framework.
 
 Notice that the serial number is kept for `CA0315: Require TOU for consultants accessing SharePoint`  since it matches the right persona group and format. However, the `CA11 - Allow login without MFA from Factories` policy is assigned a new serial number, since it is not the right length.
-
 
 ```powershell
 # Condense names and keep existing serial numbers
 .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -Condense -KeepSerialNumbers
 ```
 
+![image](./images/NameSuggestion-Condense-KeepSerial.png)
+
+TODO
 
 ```powershell
 # Use a custom name pattern with condensed names for a compact result with no whitespaces.
 .\Get-ConditionalAccessPolicyNameSuggestion.ps1 -NamePattern '{SerialNumber}-{Persona}-{TargetResource}-{Network}-{Condition}-{Response}' -Condense
 ```
+![image](./images/NameSuggestion-CustomCondensed.png)
 
+TODO
 
 ```powershell
 # Custom name pattern, akin to the one Microsoft currently recommends on Microsoft Learn
-.\Get-ConditionalAccessPolicyNameSuggestion.ps1 -NamePattern '{SerialNumber} | {Persona} | {TargetResource}'
+.\Get-ConditionalAccessPolicyNameSuggestion.ps1 -NamePattern '{SerialNumber} - {TargetResource}: {Response} For {Persona} On {Network} When {Condition}'
 ```
+
+![image](./images/NameSuggestion-CustomMicrosoft.png)
+
+TODO
 
 ## Pattern components
 
