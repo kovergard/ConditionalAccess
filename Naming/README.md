@@ -13,7 +13,8 @@ The following are some of the most common naming standards that I have encounter
 **Microsoft-managed policies**
 
 Microsoft-managed policies, and policies based on templates provided in the Conditional Access management portal, use sentence-like names like:
-```
+
+```text
 Block legacy authentication
 Securing security info registration
 Require compliant or hybrid Azure AD joined device or multifactor authentication for all users
@@ -22,7 +23,7 @@ Require compliant or hybrid Azure AD joined device or multifactor authentication
 
 [Guidance](https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access#set-naming-standards-for-your-policies) from the Microsoft Learn site suggest using a standard prefixed with a serial number on this format:
 
-```
+```text
 <SN> - <Cloud app>: <Response> For <Principal> When <Conditions>
 ```
 which will give you names like this:
@@ -36,7 +37,7 @@ For a while, Microsoft Learn linked to a GitHub repository with guidance for usi
 
 This framework suggests compact names with serial numbers and personas (See Component reference below), and contain the functionality of the policy:
 
-```
+```text
 CA100-Admins-BaseProtection-AllApps-AnyPlatform-CompliantandMFA
 CA206-Internals-DataandAppProtection-AllApps-iOSorAndroid-ClientAppORAPP
 CA403-Guests-IdentityProtection-AllApps-AnyPlatform-BlockLegacyAuth
@@ -107,9 +108,9 @@ Notice that the serial number is kept for `CA0315: Require TOU for consultants a
 
 ![image](./images/NameSuggestion-Condense-KeepSerial.png)
 
-The `-Condense` switch removes all spacing and special charcters inside each component, and converts the component to PascalCase string like `RequireMfaOrCompliantDeviceOrHybridJoinedDevice`.
+The `-Condense` switch removes all spacing and special characters inside each component, and converts the component to PascalCase string like `RequireMfaOrCompliantDeviceOrHybridJoinedDevice`.
 
-Note that `CA11 - Allow login without MFA from Factories` keeps its serial number, even if it doesnt match the right format. This is because of the `-KeepSerialNumbers` switch.
+Note that `CA11 - Allow login without MFA from Factories` keeps its serial number, even if it doesn't match the right format. This is because of the `-KeepSerialNumbers` switch.
 
 ```powershell
 # Compact name pattern
@@ -146,12 +147,12 @@ The Persona component uses definitions taken from the [Conditional Access Guidan
 
 The policies and personas are matched using group names in Entra ID with group names like `CA-Persona-{PersonaName}`. In case you want to use other groups, you will have to edit the `$CA_PERSONA` variable directly in the script.
 
-However, if you dont want to set up these groups, you don't need to! If one or more of groups do not exist, the script will assign policies to personas based on what user type the policies are assigned to. Check the table below for details on personas.
+However, if you don't want to set up these groups, you don't need to! If one or more of groups do not exist, the script will assign policies to personas based on what user type the policies are assigned to. Check the table below for details on personas.
 
 | Persona                     | SerialNumber | Default match              | Description                                                                                   |
 | --------------------------- | ------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
 | Global                      | 00           | 'All Users'                | Global is used for policies that should apply across all personas, unless explicitly excluded |
-| Admins                      | 01           | Users with a role assigned | All non-guest accounts that have priviledged access                                           |
+| Admins                      | 01           | Users with a role assigned | All non-guest accounts that have privileged access                                            |
 | Internals                   | 02           |                            | Internal non-admin employee accounts, except developers                                       |
 | Externals                   | 03           |                            | External users with an internal non-admin account, like consultants and similar               |
 | Guests                      | 04           | All guests                 | All non-admin guest accounts                                                                  |
