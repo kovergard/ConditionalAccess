@@ -1,78 +1,23 @@
-# Descriptive Conditional Access Naming
+# Conditional Access Naming
 
-Conditional Access policies can be pretty complicated to set up and maintain, and they are critical for securing access to your tenant.
+Ensuring that Conditional Access policies have names that reflects their purpose can take a lot of time, clicking around in the web portal.
 
-As the number of policies grow due to complex organizational demands, it would be great if we could add a description to the policies, documenting their purpose. 
+This folder contains scripts to make this easier.
 
-Alas, we are limited to whatever information we can cram into the name of the policy, and there are a lot of different approaches to naming.
+## Get-ConditionalAccessPolicyNameSuggestion.ps1
 
-## Naming standards
+This script provides suggestions for Conditional Access policy names by looking at the content of the policy.
 
-The following are some of the most common naming standards that I have encountered. You might be using one of these already, or have invented your own. 
+Since it only makes suggestions, only Graph read permissions are needed.
 
-**Microsoft-managed policies**
-
-Microsoft-managed policies, and policies based on templates provided in the Conditional Access management portal, use sentence-like names like:
-
-```text
-Block legacy authentication
-Securing security info registration
-Require compliant or hybrid Azure AD joined device or multifactor authentication for all users
-```
-**Suggested naming standard from Learn**
-
-[Guidance](https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access#set-naming-standards-for-your-policies) from the Microsoft Learn site suggest using a standard prefixed with a serial number on this format:
-
-```text
-<SN> - <Cloud app>: <Response> For <Principal> When <Conditions>
-```
-which will give you names like this:
-```
-CA01 - Dynamics CRP: Require MFA For Marketing When On external networks
-```
-
-**Conditional Access Guidance for Zero Trust**
-
-For a while, Microsoft Learn linked to a GitHub repository with guidance for using Conditional Access in the Zero Trust framework, and that content is still available [here](https://github.com/microsoft/ConditionalAccessforZeroTrustResources).
-
-This framework suggests compact names with serial numbers and personas (See Component reference below), and contain the functionality of the policy:
-
-```text
-CA100-Admins-BaseProtection-AllApps-AnyPlatform-CompliantandMFA
-CA206-Internals-DataandAppProtection-AllApps-iOSorAndroid-ClientAppORAPP
-CA403-Guests-IdentityProtection-AllApps-AnyPlatform-BlockLegacyAuth
-```
-
-This original repository work has not been updated since October 2023. Fortunately, others like MVP Joey Verlinden with his [Conditional Access Baseline](https://github.com/j0eyv/ConditionalAccessBaseline) project, have created updated policies using the similar naming.
-
-## A different approach – automating descriptive names
-
-Whatever "manual" standard used for naming your Conditional Access policies, you can still encounter issues like these:
-* When working in an environment with multiple administrators, naming standards might be unintentionally ignored. 
-* Some policies might have been created by admins that have left the company, and might have a misleading name.
-* The content and purpose of a policy might shift over time, so the name might not reflect the content anymore.
-
-To address these and similar issues, I wrote `Get-ConditionalAccessPolicyNameSuggestion.ps1`
-
-This script can be used to generate consistent names for Conditional Access policies, based on the content of the policy. Examples of usage and output can be found below.
-
-**Please note:** The script is NOT meant to be for documentation purposes or security auditing. If you are looking for something to help out with those areas, I recommend the following free resources instead:
-
-* [IdPowerApp CA Documenter](https://idpowertoys.merill.net/ca) - Generates visually awesome documentation of the content of each policy
-* [Maester](https://github.com/maester365/maester) - Can check the content of your policies against different security frameworks.
-
-## How to use the script
-
-The script only provides suggestions to CA policy names, and it does not write anything back to Entra ID. This means that only read access via Graph is needed for normal execution.
-
-**Requirements:**
+### Requirements
 
 The following must be in place before executing the script.
 - PowerShell 7.4.0 or later
 - Microsoft.Graph.Authentication module
 - An active Microsoft Graph connection with scopes: `Policy.Read.All`, `Application.Read.All`, `Group.Read.All`
 
-**Parameters:**
+### Parameters
 
 The script can be run without any parameters, which will produce names based on a standard pattern. But you can modify the content in the name by using the parameters. See examples below for different modifications.
 
@@ -86,7 +31,72 @@ The script can be run without any parameters, which will produce names based on 
 | `KeepSerialNumbers`     | switch | `$false`                                                                                 | Preserve existing serial numbers   |
 | `Condense`              | switch | `$false`                                                                                 | Convert parts to PascalCase        |
 
-**Examples:**
+### Name pattern components
+
+The following components can be used in the name pattern. You do not have to use them all - if you dont wan't serial numbers, simply omit it from the `-NamePattern` parameter.
+
+---
+
+**SerialNumber**
+
+A recommended unique identifier for the policy. This makes it easier to identify specific policies during implementation and troubleshooting, instead of matching a long a complex name. 
+
+By default, serial numbers are generated using `CA{PersonaSerialNumber}{Counter}`, so the first policy in the Admin persona would have the serial number CA0101.
+
+The "CA" prefix can be adjusted using the `-SerialNumberPrefix` parameter.
+
+---
+
+**Persona**
+
+The persona component uses definitions taken from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository. Further explanation of the persona concept can be found there.
+
+If possible, the script matches a policy to a persona using an Entra ID group with a name matching `CA-Persona-{PersonaName}`. If such a group is not found, the policy will be assigned to a persona based on the criteria in the Backup Match column.
+
+If you want to use other groups, you will have to edit the `$CA_PERSONA` variable directly in the script.
+
+| Persona                     | Serial | Entra ID Group Name                    | Backup Match      | Description                                                                                   |
+| --------------------------- | ------ | -------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------- |
+| Global                      | 00     | CA-Persona-Global                      | All users         | Global is used for policies that should apply across all personas, unless explicitly excluded |
+| Admins                      | 01     | CA-Persona-Admins                      | All roles         | All non-guest accounts that have privileged access                                            |
+| Internals                   | 02     | CA-Persona-Internals                   |                   | Internal non-admin employee accounts, except developers                                       |
+| Externals                   | 03     | CA-Persona-Externals                   |                   | External users with an internal non-admin account, like consultants and similar               |
+| Guests                      | 04     | CA-Persona-Guests                      | All guests        | All non-admin guest accounts                                                                  |
+| GuestAdmins                 | 05     | CA-Persona-GuestAdmins                 |                   | All admin guest accounts                                                                      |
+| Microsoft365ServiceAccounts | 06     | CA-Persona-Microsoft365ServiceAccounts |                   | Cloud-native user-based service accounts used to access Microsoft 365 services                |
+| AzureServiceAccounts        | 07     | CA-Persona-AzureServiceAccounts        |                   | Cloud-native user-based service accounts used to access  Microsoft Azure (IaaS/PaaS) services |
+| CorpServiceAccounts         | 08     | CA-Persona-CorpServiceAccounts         |                   | Service account synchronized from on-premises AD used to access Azure/M365. Should be avoided |
+| WorkloadIdentities          | 09     | CA-Persona-WorkloadIdentities          |                   | Entra ID service principals and managed identities                                            |
+| Developers                  | 10     | CA-Persona-Developers                  |                   | Internal or external developers                                                               |
+| Agents                      | 11     | CA-Persona-Agents                      | All agents        | AI Agents                                                                                     |
+
+---
+
+**TargetResource**
+
+Applications or user actions
+
+---
+
+**Network**
+
+Named locations or network type
+
+---
+
+**Condition**
+
+Risk levels, platforms, client apps
+
+---
+
+**Response**
+
+Block or require controls
+
+---
+
+### Examples
 
 ```powershell
 # Connect to MS Graph 
@@ -127,59 +137,12 @@ The combination of the `-NamePattern` parameter and the `-Condense` switch makes
 
 ![image](./images/NameSuggestion-CustomMicrosoft.png)
 
-The use `-NamePattern` here makes for names that are akin to what Microsoft currently recommends on Microsoft Learn.
+The use `-NamePattern` here makes for names that are akin to what is currently recommended on [Microsoft Learn](https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access#set-naming-standards-for-your-policies).
 
-## Pattern components
+### Ideas for future improvements
 
-The following components can be used in the name pattern.
-
-**SerialNumber**
-
-A recommended unique identifier for the policy. This makes it easier to identify specific policies during implementation and troubleshooting, instead of matching a long a complex name. 
-
-By default, serial numbers are generated using `CA{PersonaSerialNumber}{Counter}`, so the first policy in the Admin persona would have the serial number CA0101.
-
-The "CA" prefix can be adjusted using the `-SerialNumberPrefix` parameter.
-
-**Persona**
-
-The Persona component uses definitions taken from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository, with the new addition of agents.
-
-The policies and personas are matched using group names in Entra ID with group names like `CA-Persona-{PersonaName}`. In case you want to use other groups, you will have to edit the `$CA_PERSONA` variable directly in the script.
-
-However, if you don't want to set up these groups, you don't need to! If one or more of groups do not exist, the script will assign policies to personas based on what user type the policies are assigned to. Check the table below for details on personas.
-
-| Persona                     | SerialNumber | Default match              | Description                                                                                   |
-| --------------------------- | ------------ | -------------------------- | --------------------------------------------------------------------------------------------- |
-| Global                      | 00           | 'All Users'                | Global is used for policies that should apply across all personas, unless explicitly excluded |
-| Admins                      | 01           | Users with a role assigned | All non-guest accounts that have privileged access                                            |
-| Internals                   | 02           |                            | Internal non-admin employee accounts, except developers                                       |
-| Externals                   | 03           |                            | External users with an internal non-admin account, like consultants and similar               |
-| Guests                      | 04           | All guests                 | All non-admin guest accounts                                                                  |
-| GuestAdmins                 | 05           |                            | All admin guest accounts                                                                      |
-| Microsoft365ServiceAccounts | 06           |                            | Cloud-native user-based service accounts used to access Microsoft 365 services                |
-| AzureServiceAccounts        | 07           |                            | Cloud-native user-based service accounts used to access  Microsoft Azure (IaaS/PaaS) services |
-| CorpServiceAccounts         | 08           |                            | Service account synchronized from on-premises AD used to access Azure/M365. Should be avoided |
-| WorkloadIdentities          | 09           |                            | Entra ID service principals and managed identities                                            |
-| Developers                  | 10           |                            | Internal or external developers                                                               |
-| Agents                      | 11           | All agents                 | AI Agents                                                                                     |
-
-
-**TargetResource**
-
-Applications or user actions
-
-**Network**
-
-Named locations or network type
-
-**Condition**
-
-Risk levels, platforms, client apps
-
-**Response**
-
-Block or require controls
+* Add an option to use Entra ID group names instead of personas in the suggested name.
+* Make it possible to modify groups for `$CA_PERSONA` without editing the script directly.
 
 ---
 
