@@ -35,6 +35,8 @@ The script can be run without any parameters, which will produce names based on 
 
 The following components can be used in the name pattern. You do not have to use them all - if you dont wan't serial numbers, simply omit it from the `-NamePattern` parameter.
 
+**Please note:** Settings related to Global Secure Access is not yet resolved.
+
 ---
 
 **SerialNumber**
@@ -43,13 +45,13 @@ A recommended unique identifier for the policy. This makes it easier to identify
 
 By default, serial numbers are generated using `CA{PersonaSerialNumber}{Counter}`, so the first policy in the Admin persona would have the serial number CA0101.
 
-The "CA" prefix can be adjusted using the `-SerialNumberPrefix` parameter.
+The "CA" prefix can be changed using the `-SerialNumberPrefix` parameter.
 
 ---
 
 **Persona**
 
-The persona component uses definitions taken from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository. Further explanation of the persona concept can be found there.
+The persona component uses definitions from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository. Further explanation of the persona concept can be found there.
 
 If possible, the script matches a policy to a persona using an Entra ID group with a name matching `CA-Persona-{PersonaName}`. If such a group is not found, the policy will be assigned to a persona based on the criteria in the Backup Match column.
 
@@ -74,25 +76,35 @@ If you want to use other groups, you will have to edit the `$CA_PERSONA` variabl
 
 **TargetResource**
 
-Applications or user actions
+Contain application names ('All apps', 'Office 365' and similar) or user actions ('Register or join device' or 'Register security info').
+
+Application names are resolved using the `$CA_APP` table, so additional applications can be added there if necessary.
 
 ---
 
 **Network**
 
-Named locations or network type
+Contains the name of the network defined in the policy (or 'Any network' if not defined). 
+
+Named locations will be shown using their display name.
 
 ---
 
 **Condition**
 
-Risk levels, platforms, client apps
+Contain risks, platforms, client apps, device filters and authentication flows as defined on the Conditions section of the policy.
+
+Device filters are stored as strings in Graph, and is thus difficult to parse, a simple 'Device filters applied' text will be inserted if device filters has been used.
+
+Network is not included here, as it has been moved it a dedicated component.
 
 ---
 
 **Response**
 
-Block or require controls
+This combines the different settings under the Access controls section - both Grant and Session controls.
+
+Depending on the policy, the response can range from a simple 'Block' to longer responses like 'Require MFA and password change and Sign-in frequency Every time'.
 
 ---
 
@@ -143,6 +155,9 @@ The use `-NamePattern` here makes for names that are akin to what is currently r
 
 * Add an option to use Entra ID group names instead of personas in the suggested name.
 * Make it possible to modify groups for `$CA_PERSONA` without editing the script directly.
+* Create a fallback resolution of applications names using Graph, if the application is not in the `$CA_APP` table
+* Add resolution of Global Secure Access settings
+
 
 ---
 
