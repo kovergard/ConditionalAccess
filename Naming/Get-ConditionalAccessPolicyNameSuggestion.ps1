@@ -493,7 +493,7 @@ function Resolve-CaTargetResource {
 
     # Check for excludes if All apps are included
     if ($Apps -contains $CA_APP['All'] -and $ExcludeApps) {
-        return "$($Apps) except $($ExcludeApps -join $AllPartsDelimiter)"
+        return "$($Apps)$ExcludePartsDelimiter$($ExcludeApps -join $AllPartsDelimiter)"
     }
 
     if ($Apps) {
