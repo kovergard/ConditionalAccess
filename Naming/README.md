@@ -6,7 +6,7 @@ This folder contains scripts to make this easier.
 
 ## Get-ConditionalAccessPolicyNameSuggestion.ps1
 
-This script provides suggestions for Conditional Access policy names by looking at the content of the policy.
+This script provides suggestions for Conditional Access policy names by looking at the content of the policy. For an indepth explaination of the script and its use, visit https://blog.overgard.dk/2026/automating-ca-policy-names 
 
 Since it only makes suggestions, only Graph read permissions are needed.
 
@@ -39,7 +39,7 @@ The following components can be used in the name pattern. You do not have to use
 
 ---
 
-**SerialNumber**
+#### SerialNumber
 
 A recommended unique identifier for the policy. This makes it easier to identify specific policies during implementation and troubleshooting, instead of matching a long a complex name. 
 
@@ -49,7 +49,7 @@ The "CA" prefix can be changed using the `-SerialNumberPrefix` parameter.
 
 ---
 
-**Persona**
+#### Persona
 
 The persona component uses definitions from the [Conditional Access Guidance for Zero Trust](https://github.com/microsoft/ConditionalAccessforZeroTrustResources) repository. Further explanation of the persona concept can be found there.
 
@@ -74,7 +74,7 @@ If you want to use other groups, you will have to edit the `$CA_PERSONA` variabl
 
 ---
 
-**TargetResource**
+#### TargetResource
 
 Contain application names ('All apps', 'Office 365' and similar) or user actions ('Register or join device' or 'Register security info').
 
@@ -82,7 +82,7 @@ Application names are resolved using the `$CA_APP` table, so additional applicat
 
 ---
 
-**Network**
+#### Network
 
 Contains the name of the network defined in the policy (or 'Any network' if not defined). 
 
@@ -90,7 +90,7 @@ Named locations will be shown using their display name.
 
 ---
 
-**Condition**
+#### Condition
 
 Contain risks, platforms, client apps, device filters and authentication flows as defined on the Conditions section of the policy.
 
@@ -100,7 +100,7 @@ Network is not included here, as it has been moved it a dedicated component.
 
 ---
 
-**Response**
+#### Response
 
 This combines the different settings under the Access controls section - both Grant and Session controls.
 
