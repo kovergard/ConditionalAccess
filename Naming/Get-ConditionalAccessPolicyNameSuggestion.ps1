@@ -983,6 +983,6 @@ $SuggestedPolicyNames = foreach ($MgPolicy in $MgPolicies) {
         Write-Warning "Error processing policy '$($MgPolicy.displayName)': $($_.Exception.Message)"
     }        
 }
-$SuggestedPolicyNames | Write-Output 
+$SuggestedPolicyNames | Sort-Object -Property SuggestedName | Write-Output 
 
 #endregion MAIN
