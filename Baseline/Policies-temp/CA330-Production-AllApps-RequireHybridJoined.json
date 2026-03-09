@@ -1,17 +1,17 @@
 {
-  "displayName": "CA240-KnowledgeWorker-M365-RequireStrongAuth",
+  "displayName": "CA330-Production-AllApps-RequireHybridJoined",
   "state": "disabled",
   "conditions": {
     "users": {
       "includeUsers": [],
       "excludeUsers": [],
-      "includeGroups": [ "{{GroupId_KnowledgeWorker}}" ],
+      "includeGroups": [ "{{GroupId_Production}}" ],
       "excludeGroups": [],
       "includeRoles": [],
       "excludeRoles": []
     },
     "applications": {
-      "includeApplications": [ "Office365" ],
+      "includeApplications": [ "All" ],
       "excludeApplications": [],
       "includeUserActions": []
     },
@@ -20,16 +20,20 @@
     "locations": null,
     "signInRiskLevels": [],
     "userRiskLevels": [],
-    "deviceStates": null,
-    "devices": null,
+    "deviceStates": {
+      "includeStates": [ "hybridAzureADJoined" ],
+      "excludeStates": []
+    },
+    "devices": {
+      "deviceFilter": null
+    },
     "clientApplications": null
   },
   "grantControls": {
     "operator": "OR",
     "builtInControls": [],
-    "authenticationStrength": {
-      "id": "00000000-0000-0000-0000-000000000002"
-    }
+    "customAuthenticationFactors": [],
+    "termsOfUse": []
   },
   "sessionControls": null
 }

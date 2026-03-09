@@ -1,24 +1,24 @@
 {
-  "displayName": "CA230-KnowledgeWorker-SensitiveApps-BrowserOnly",
-  "state": "disabled",
+  "displayName": "CA310-Production-ApprovedApps-Only",
+  "state": "reportOnly",
   "conditions": {
     "users": {
       "includeUsers": [],
       "excludeUsers": [],
-      "includeGroups": [ "{{GroupId_KnowledgeWorker}}" ],
+      "includeGroups": [ "{{GroupId_Production}}" ],
       "excludeGroups": [],
       "includeRoles": [],
       "excludeRoles": []
     },
     "applications": {
-      "includeApplications": [
-        "{{AppId_SensitiveApp1}}",
-        "{{AppId_SensitiveApp2}}"
+      "includeApplications": [ "All" ],
+      "excludeApplications": [
+        "{{AppId_Approved1}}",
+        "{{AppId_Approved2}}"
       ],
-      "excludeApplications": [],
       "includeUserActions": []
     },
-    "clientAppTypes": [ "browser" ],
+    "clientAppTypes": [ "all" ],
     "platforms": null,
     "locations": null,
     "signInRiskLevels": [],
@@ -29,7 +29,9 @@
   },
   "grantControls": {
     "operator": "OR",
-    "builtInControls": []
+    "builtInControls": [ "block" ],
+    "customAuthenticationFactors": [],
+    "termsOfUse": []
   },
   "sessionControls": null
 }

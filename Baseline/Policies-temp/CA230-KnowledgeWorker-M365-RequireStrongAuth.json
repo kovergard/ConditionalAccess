@@ -1,5 +1,5 @@
 {
-  "displayName": "CA250-KnowledgeWorker-M365-ShortSession",
+  "displayName": "CA230-KnowledgeWorker-M365-RequireStrongAuth",
   "state": "disabled",
   "conditions": {
     "users": {
@@ -15,7 +15,7 @@
       "excludeApplications": [],
       "includeUserActions": []
     },
-    "clientAppTypes": [ "browser" ],
+    "clientAppTypes": [ "browser", "mobileAppsAndDesktopClients" ],
     "platforms": null,
     "locations": null,
     "signInRiskLevels": [],
@@ -24,14 +24,12 @@
     "devices": null,
     "clientApplications": null
   },
-  "grantControls": { "operator": "OR", "builtInControls": [] },
-  "sessionControls": {
-    "signInFrequency": {
-      "isEnabled": true,
-      "type": "hours",
-      "value": 24,
-      "authenticationType": "primaryAndSecondary"
-    },
-    "persistentBrowser": { "isEnabled": true, "mode": "never" }
-  }
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [],
+    "authenticationStrength": {
+      "id": "00000000-0000-0000-0000-000000000002"
+    }
+  },
+  "sessionControls": null
 }
