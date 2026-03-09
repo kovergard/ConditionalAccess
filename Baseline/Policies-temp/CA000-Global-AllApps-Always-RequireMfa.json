@@ -1,0 +1,34 @@
+{
+  "displayName": "CA000-Global-AllApps-Always-RequireMfa",
+  "state": "reportOnly",
+  "conditions": {
+    "users": {
+      "includeUsers": ["All"],
+      "excludeUsers": [],
+      "includeGroups": [],
+      "excludeGroups": ["{BreakGlassGroupObjectId}", "{ServiceGroupObjectId}"],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": ["All"],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": ["all"],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": ["mfa"],
+    "customAuthenticationFactors": [],
+    "termsOfUse": []
+  },
+  "sessionControls": null
+}

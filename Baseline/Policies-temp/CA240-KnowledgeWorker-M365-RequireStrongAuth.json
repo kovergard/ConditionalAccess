@@ -1,0 +1,35 @@
+{
+  "displayName": "CA240-KnowledgeWorker-M365-RequireStrongAuth",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_KnowledgeWorker}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [ "Office365" ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "browser", "mobileAppsAndDesktopClients" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [],
+    "authenticationStrength": {
+      "id": "00000000-0000-0000-0000-000000000002"
+    }
+  },
+  "sessionControls": null
+}

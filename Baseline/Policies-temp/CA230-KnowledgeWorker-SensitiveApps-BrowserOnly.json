@@ -1,0 +1,35 @@
+{
+  "displayName": "CA230-KnowledgeWorker-SensitiveApps-BrowserOnly",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_KnowledgeWorker}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [
+        "{{AppId_SensitiveApp1}}",
+        "{{AppId_SensitiveApp2}}"
+      ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": []
+  },
+  "sessionControls": null
+}

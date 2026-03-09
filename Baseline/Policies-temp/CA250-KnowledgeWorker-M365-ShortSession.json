@@ -1,0 +1,37 @@
+{
+  "displayName": "CA250-KnowledgeWorker-M365-ShortSession",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_KnowledgeWorker}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [ "Office365" ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": { "operator": "OR", "builtInControls": [] },
+  "sessionControls": {
+    "signInFrequency": {
+      "isEnabled": true,
+      "type": "hours",
+      "value": 24,
+      "authenticationType": "primaryAndSecondary"
+    },
+    "persistentBrowser": { "isEnabled": true, "mode": "never" }
+  }
+}
