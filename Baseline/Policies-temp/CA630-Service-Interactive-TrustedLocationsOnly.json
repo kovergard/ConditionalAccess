@@ -1,0 +1,35 @@
+{
+  "displayName": "CA630-Service-Interactive-TrustedLocationsOnly",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ServiceInteractiveException}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [ "All" ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "browser", "mobileAppsAndDesktopClients", "exchangeActiveSync" ],
+    "platforms": null,
+    "locations": {
+      "includeLocations": [ "All" ],
+      "excludeLocations": [ "{{NamedLocationId_TrustedNetworks}}" ]
+    },
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [ "block" ]
+  },
+  "sessionControls": null
+}

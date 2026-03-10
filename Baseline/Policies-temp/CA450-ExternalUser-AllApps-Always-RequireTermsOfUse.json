@@ -1,0 +1,34 @@
+{
+  "displayName": "CA450-ExternalUser-AllApps-Always-RequireTermsOfUse",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": [],
+      "includeGuestsOrExternalUsers": {
+        "guestOrExternalUserTypes": "guest",
+        "externalTenants": { "membershipKind": "all" }
+      }
+    },
+    "applications": { "includeApplications": [ "All" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "all" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [],
+    "termsOfUse": [ "{{TermsOfUseId_ExternalUsers}}" ],
+    "customAuthenticationFactors": []
+  },
+  "sessionControls": null
+}

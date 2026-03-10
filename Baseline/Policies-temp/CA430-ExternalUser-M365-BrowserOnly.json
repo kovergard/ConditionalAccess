@@ -1,0 +1,32 @@
+{
+  "displayName": "CA430-ExternalUser-M365-BrowserOnly",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": [],
+      "includeGuestsOrExternalUsers": {
+        "guestOrExternalUserTypes": "guest",
+        "externalTenants": { "membershipKind": "all" }
+      }
+    },
+    "applications": { "includeApplications": [ "Office365" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": { "operator": "OR", "builtInControls": [] },
+  "sessionControls": {
+    "signInFrequency": { "isEnabled": true, "type": "hours", "value": 24, "authenticationType": "primaryAndSecondary" },
+    "persistentBrowser": { "isEnabled": true, "mode": "never" }
+  }
+}

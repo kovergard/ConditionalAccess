@@ -1,0 +1,30 @@
+{
+  "displayName": "CA540-ExternalAdmin-AdminPortals-Always-RequireTokenProtection",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ExternalAdmin}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": { "includeApplications": [ "MicrosoftAdminPortals" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "browser", "mobileAppsAndDesktopClients" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [ "tokenProtection" ],
+    "customAuthenticationFactors": [],
+    "termsOfUse": []
+  },
+  "sessionControls": null
+}

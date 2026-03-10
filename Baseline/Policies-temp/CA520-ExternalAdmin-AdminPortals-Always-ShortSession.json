@@ -1,0 +1,28 @@
+{
+  "displayName": "CA520-ExternalAdmin-AdminPortals-Always-ShortSession",
+  "state": "reportOnly",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ExternalAdmin}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": { "includeApplications": [ "MicrosoftAdminPortals" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": { "operator": "OR", "builtInControls": [] },
+  "sessionControls": {
+    "signInFrequency": { "isEnabled": true, "type": "hours", "value": 8, "authenticationType": "primaryAndSecondary" },
+    "persistentBrowser": { "isEnabled": true, "mode": "never" }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "displayName": "CA530-ExternalAdmin-AdminPortals-Always-RequirePhishingResistantMfa",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ExternalAdmin}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": { "includeApplications": [ "MicrosoftAdminPortals" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "browser", "mobileAppsAndDesktopClients" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "authenticationStrength": { "id": "00000000-0000-0000-0000-000000000003" }
+  },
+  "sessionControls": null
+}

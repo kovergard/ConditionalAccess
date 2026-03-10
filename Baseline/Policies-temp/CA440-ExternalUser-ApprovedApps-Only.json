@@ -1,0 +1,39 @@
+{
+  "displayName": "CA440-ExternalUser-ApprovedApps-Only",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": [],
+      "includeGuestsOrExternalUsers": {
+        "guestOrExternalUserTypes": "guest",
+        "externalTenants": { "membershipKind": "all" }
+      }
+    },
+    "applications": {
+      "includeApplications": [ "All" ],
+      "excludeApplications": [
+        "{{AppId_ApprovedGuestApp1}}",
+        "{{AppId_ApprovedGuestApp2}}"
+      ],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "all" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [ "block" ]
+  },
+  "sessionControls": null
+}
