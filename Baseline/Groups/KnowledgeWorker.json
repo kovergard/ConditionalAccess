@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-KnowledgeWorker",
+  "description": "Default internal human users. Use this static group as the CA target and nest license/dynamic HR groups under it to populate membership.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-KnowledgeWorker",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

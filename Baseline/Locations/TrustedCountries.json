@@ -1,0 +1,9 @@
+{
+  "@odata.type": "#microsoft.graph.countryNamedLocation",
+  "displayName": "TrustedCountries",
+  "countriesAndRegions": [
+    "DK",
+    "SE"
+  ],
+  "includeUnknownCountriesAndRegions": false
+}

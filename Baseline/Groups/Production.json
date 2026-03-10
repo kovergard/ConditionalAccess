@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-Production",
+  "description": "Frontline/blue-collar users in constrained environments. Membership is explicit and small. Compensating controls: allowed locations, approved apps, and device trust.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-Production",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

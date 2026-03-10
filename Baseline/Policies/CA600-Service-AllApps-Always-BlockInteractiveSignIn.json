@@ -1,0 +1,34 @@
+{
+  "displayName": "CA600-Service-AllApps-Always-BlockInteractiveSignIn",
+  "state": "enabledForReportingButNotEnforced",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_Service}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [ "All" ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "all" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [ "block" ],
+    "customAuthenticationFactors": [],
+    "termsOfUse": []
+  },
+  "sessionControls": null
+}

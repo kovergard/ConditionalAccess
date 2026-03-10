@@ -1,0 +1,28 @@
+{
+  "displayName": "CA510-ExternalAdmin-PimActivation-Always-RequirePhishingResistantMfa",
+  "state": "enabledForReportingButNotEnforced",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ExternalAdmin}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": { "includeApplications": [], "excludeApplications": [], "includeUserActions": [ "urn:user:privilegedrole:activate" ] },
+    "clientAppTypes": [ "all" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "authenticationStrength": { "id": "00000000-0000-0000-0000-000000000003" }
+  },
+  "sessionControls": null
+}

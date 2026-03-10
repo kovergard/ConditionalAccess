@@ -1,0 +1,45 @@
+{
+  "displayName": "CA340-Production-AllApps-Always-SessionLeniency",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_Production}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": {
+      "includeApplications": [ "All" ],
+      "excludeApplications": [],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": { "operator": "OR", "builtInControls": [] },
+ "sessionControls": {
+    "cloudAppSecurity": null,
+    "persistentBrowser": {
+      "mode": "never",
+      "isEnabled": true
+    },
+    "secureSignInSession": null,
+    "applicationEnforcedRestrictions": null,
+    "signInFrequency": {
+      "value": 3,
+      "frequencyInterval": "timeBased",
+      "isEnabled": true,
+      "type": "days",
+      "authenticationType": "primaryAndSecondaryAuthentication"
+    },
+    "disableResilienceDefaults": null
+  }
+}

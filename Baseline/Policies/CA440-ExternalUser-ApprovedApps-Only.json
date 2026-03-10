@@ -1,0 +1,40 @@
+{
+  "displayName": "CA440-ExternalUser-ApprovedApps-Only",
+  "state": "disabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": [],
+      "includeGuestsOrExternalUsers": {
+        "externalTenants": {
+          "@odata.type": "#microsoft.graph.conditionalAccessAllExternalTenants",
+          "membershipKind": "all"
+        },
+        "guestOrExternalUserTypes": "internalGuest,b2bCollaborationGuest,b2bCollaborationMember,b2bDirectConnectUser,otherExternalUser,serviceProvider"
+      }
+    },
+    "applications": {
+      "includeApplications": [ "All" ],
+      "excludeApplications": [
+        "c9a559d2-7aab-4f13-a6ed-e7e9c52aec87"      ],
+      "includeUserActions": []
+    },
+    "clientAppTypes": [ "all" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [ "block" ]
+  },
+  "sessionControls": null
+}

@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-Service",
+  "description": "Service/non-human identities. Interactive sign-in is blocked (CA600+). Keep separate from human personas; prefer workload identities long-term.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-Service",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

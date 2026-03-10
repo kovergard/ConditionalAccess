@@ -1,0 +1,61 @@
+{
+  "createdDateTime": "2026-03-10T13:35:24.5562755Z",
+  "displayName": "CA140-Admin-AdminPortals-Always-ShortSession",
+  "state": "disabled",
+  "grantControls": null,
+  "sessionControls": {
+    "cloudAppSecurity": null,
+    "persistentBrowser": {
+      "mode": "never",
+      "isEnabled": true
+    },
+    "secureSignInSession": null,
+    "applicationEnforcedRestrictions": null,
+    "signInFrequency": {
+      "value": 8,
+      "frequencyInterval": "timeBased",
+      "isEnabled": true,
+      "type": "hours",
+      "authenticationType": "primaryAndSecondaryAuthentication"
+    },
+    "disableResilienceDefaults": null
+  },
+  "templateId": null,
+  "modifiedDateTime": null,
+  "conditions": {
+    "devices": null,
+    "clientApplications": null,
+    "applications": {
+      "includeAuthenticationContextClassReferences": [],
+      "excludeApplications": [],
+      "includeApplications": [
+        "All"
+      ],
+      "applicationFilter": null,
+      "includeUserActions": []
+    },
+    "insiderRiskLevels": null,
+    "servicePrincipalRiskLevels": [],
+    "platforms": null,
+    "authenticationFlows": null,
+    "clientAppTypes": [
+      "all"
+    ],
+    "userRiskLevels": [],
+    "users": {
+      "includeRoles": [
+        "db506228-d27e-4b7d-95e5-295956d6615f"
+      ],
+      "excludeRoles": [],
+      "includeGroups": [],
+      "excludeUsers": [],
+      "includeUsers": [],
+      "includeGuestsOrExternalUsers": null,
+      "excludeGuestsOrExternalUsers": null,
+      "excludeGroups": []
+    },
+    "signInRiskLevels": [],
+    "locations": null
+  },
+  "id": "1a11c85e-17a8-4dd7-9821-7e182b05b167"
+}

@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-Admin",
+  "description": "OPTIONAL. Internal privileged admins (for reporting or additional hardening only). Admin protections are enforced role-based by CA1xx regardless of this group.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-Admin",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

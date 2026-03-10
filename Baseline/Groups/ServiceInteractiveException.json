@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Service-Interactive-Exception",
+  "description": "Narrow, time-bound exception set for service identities that temporarily require interactive sign-in. Used with CA630 to permit only from trusted locations.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Service-Interactive-Exception",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

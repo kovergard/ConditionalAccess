@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-BreakGlass",
+  "description": "Emergency access accounts (2 cloud-only users). Excluded from all CA enforcement; heavily monitored. Test monthly.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-BreakGlass",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

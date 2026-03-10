@@ -1,0 +1,41 @@
+{
+  "displayName": "CA520-ExternalAdmin-AdminPortals-Always-ShortSession",
+  "state": "enabledForReportingButNotEnforced",
+  "conditions": {
+    "users": {
+      "includeUsers": [],
+      "excludeUsers": [],
+      "includeGroups": [ "{{GroupId_ExternalAdmin}}" ],
+      "excludeGroups": [],
+      "includeRoles": [],
+      "excludeRoles": []
+    },
+    "applications": { "includeApplications": [ "All" ], "excludeApplications": [], "includeUserActions": [] },
+    "clientAppTypes": [ "browser" ],
+    "platforms": null,
+    "locations": null,
+    "signInRiskLevels": [],
+    "userRiskLevels": [],
+    "deviceStates": null,
+    "devices": null,
+    "clientApplications": null
+  },
+  "grantControls": { "operator": "OR", "builtInControls": [] },
+    "sessionControls": {
+    "cloudAppSecurity": null,
+    "persistentBrowser": {
+      "mode": "never",
+      "isEnabled": true
+    },
+    "secureSignInSession": null,
+    "applicationEnforcedRestrictions": null,
+    "signInFrequency": {
+      "value": 8,
+      "frequencyInterval": "timeBased",
+      "isEnabled": true,
+      "type": "hours",
+      "authenticationType": "primaryAndSecondaryAuthentication"
+    },
+    "disableResilienceDefaults": null
+  }
+}

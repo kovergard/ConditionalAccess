@@ -1,0 +1,10 @@
+{
+  "displayName": "CA-Persona-ExternalAdmin",
+  "description": "Vetted external administrators (guests or tenant-native consultants). Triggers CA5xx hardening on top of CA1xx role-based guardrails.",
+  "mailEnabled": false,
+  "mailNickname": "CA-Persona-ExternalAdmin",
+  "securityEnabled": true,
+  "groupTypes": [],
+  "visibility": "Private",
+  "creationOptions": []
+}

@@ -1,0 +1,19 @@
+{
+  "@odata.type": "#microsoft.graph.ipNamedLocation",
+  "displayName": "TrustedNetworks",
+  "isTrusted": true,
+  "ipRanges": [
+    {
+      "@odata.type": "#microsoft.graph.iPv4CidrRange",
+      "cidrAddress": "10.0.0.0/8"
+    },
+    {
+      "@odata.type": "#microsoft.graph.iPv4CidrRange",
+      "cidrAddress": "172.16.0.0/12"
+    },
+    {
+      "@odata.type": "#microsoft.graph.iPv4CidrRange",
+      "cidrAddress": "192.168.0.0/16"
+    }
+  ]
+}
